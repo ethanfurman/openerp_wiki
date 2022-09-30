@@ -238,7 +238,7 @@ class wiki_doc(osv.AbstractModel):
             return Document(source_doc).to_html()
         except Exception:
             _logger.exception('stonemark unable to convert document %s', name)
-            return escape(source_doc)
+            return '<pre>' + escape(source_doc) + '</pre>' 
 
 
     #-----------------------------------------------------------------------------------
