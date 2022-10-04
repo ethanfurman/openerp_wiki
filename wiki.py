@@ -85,8 +85,8 @@ from VSS.utils import translator
 _logger = logging.getLogger(__name__)
 
 _name_key = translator(
-     frm='ABCDEFGHIJKLMNOPQRSTUVWXYZ ',
-      to='abcdefghijklmnopqrstuvwxyz_',
+     frm='ABCDEFGHIJKLMNOPQRSTUVWXYZ +/',
+      to='abcdefghijklmnopqrstuvwxyz_--',
     keep='abcdefghijklmnopqrstuvwxyz_0123456789.-',
    strip='_',
     )
