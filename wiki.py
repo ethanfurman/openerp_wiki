@@ -87,7 +87,7 @@ _logger = logging.getLogger(__name__)
 _name_key = translator(
      frm='ABCDEFGHIJKLMNOPQRSTUVWXYZ ',
       to='abcdefghijklmnopqrstuvwxyz_',
-    keep='abcdefghijklmnopqrstuvwxyz_0123456789.',
+    keep='abcdefghijklmnopqrstuvwxyz_0123456789.-',
    strip='_',
     )
 
@@ -290,9 +290,6 @@ class wiki_doc(osv.AbstractModel):
                         document,
                         context=context,
                         )
-                print
-                print document
-                print
                 values['wiki_doc'] = document
                 if forward_links:
                     values['forward_links'] = [(6, 0, forward_links)]
