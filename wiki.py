@@ -75,11 +75,14 @@ example `_view.xaml` file
 from antipathy import Path
 from base64 import b64decode
 import logging
+import openerp
 from openerp import VAR_DIR, SUPERUSER_ID
 from openerp.exceptions import ERPError
 from openerp.osv import osv, fields
 import re
+from textwrap import dedent
 from stonemark import Document, escape
+import threading
 from VSS.utils import translator
 
 _logger = logging.getLogger(__name__)
@@ -88,7 +91,6 @@ _name_key = translator(
      frm='ABCDEFGHIJKLMNOPQRSTUVWXYZ +/',
       to='abcdefghijklmnopqrstuvwxyz_--',
     keep='abcdefghijklmnopqrstuvwxyz_0123456789.-',
-   strip='_',
     )
 
 
@@ -140,28 +142,43 @@ class wiki_doc(osv.AbstractModel):
             self.__class__._wiki_tables.add(self._name)
             # set file path
             self._wiki_path = self.__class__._wiki_path / self._defaults['wiki_key']
-            _logger.warning('self._wiki_path = %r', self._wiki_path)
+            _logger.info('self._wiki_path = %r', self._wiki_path)
 
     def _auto_init(self, cr, context=None):
         res = super(wiki_doc, self)._auto_init(cr, context)
         if self.__class__.__name__ != 'wiki_doc':
             if not self._wiki_path.exists():
-                self._wiki_path.makedirs()
-                for rec in self.browse(cr, SUPERUSER_ID, [(1,'=',1)], context=context):
-                    try:
-                        if not rec.name_key:
-                            self.write(cr, SUPERUSER_ID, rec.id, {'name_key': self._name_key(rec.name)})
-                        if rec.source_type == 'txt':
-                            self._write_html_file(cr, SUPERUSER_ID, rec.id, context=context)
-                        elif rec.source_type == 'img':
-                            self._write_image_file(cr, SUPERUSER_ID, rec.id, context=context)
-                        else:
-                            _logger.error('rec id %d is missing `source_type`', rec.id)
-                    except Exception:
-                        pass
+                # get our own cursor in case something fails
+                db_name = threading.current_thread().dbname
+                db = openerp.sql_db.db_connect(db_name)
+                wiki_cr = db.cursor()
+                try:
+                    _logger.info('wiki: writing files for %r', self._name)
+                    self._wiki_path.makedirs()
+                    for rec in self.browse(wiki_cr, SUPERUSER_ID, [(1,'=',1)], context=context):
+                        wiki_cr.execute(dedent('''
+                                UPDATE %s 
+                                SET name=%%s, name_key=%%s
+                                WHERE id=%%s
+                                ''' % (self._table, )), (rec.name.strip(), _name_key(rec.name.strip()), rec.id)
+                                )
+                        try:
+                            if rec.source_type == 'txt':
+                                self._write_html_file(wiki_cr, SUPERUSER_ID, rec.id, context=context)
+                            elif rec.source_type == 'img':
+                                self._write_image_file(wiki_cr, SUPERUSER_ID, rec.id, context=context)
+                            else:
+                                _logger.error('rec id %d is missing `source_type`', rec.id)
+                        except Exception:
+                            _logger.exception('error processing %r' % rec.name)
+                    wiki_cr.commit()
+                finally:
+                    wiki_cr.close()
         return res
 
     def _write_html_file(self, cr, uid, id, context=None):
+        if not isinstance(id, (int, long)):
+            [id] = id
         def repl(mo):
             href, target, close = mo.groups()
             if target.startswith('http'):
@@ -180,6 +197,8 @@ class wiki_doc(osv.AbstractModel):
             fh.write(document)
 
     def _write_image_file(self, cr, uid, id, context=None):
+        if not isinstance(id, (int, long)):
+            [id] = id
         rec = self.browse(cr, uid, id, context=context)
         name = rec.name_key
         file = self._wiki_path/name
@@ -187,6 +206,8 @@ class wiki_doc(osv.AbstractModel):
             fh.write(b64decode(rec.source_img))
 
     def _convert_links(self, cr, uid, id, document, context=None):
+        if not isinstance(id, (int, long)):
+            [id] = id
         context = (context or {}).copy()
         context['wiki_reverse_link'] = id
         forward_links = []
@@ -220,7 +241,7 @@ class wiki_doc(osv.AbstractModel):
                 # create empty page
                 target_ids = [self.create(
                         cr, uid,
-                        values={'name':target, 'source_doc':'[under construction]'},
+                        values={'name':target, 'source_doc':'[[under construction]]'},
                         context=context,
                         )]
             forward_links.extend(target_ids)
@@ -255,7 +276,7 @@ class wiki_doc(osv.AbstractModel):
         # replace page_name links in wiki_doc with ids of linked records
         if context is None:
             context = {}
-        name = values.get('name', '')
+        name = values['name'] = values['name'].strip()
         values['name_key'] = _name_key(name)
         new_id = super(wiki_doc, self).create(cr, uid, values, context=context)
         del values['name']
@@ -267,10 +288,15 @@ class wiki_doc(osv.AbstractModel):
         context = context or {}
         if isinstance(ids, (int, long)):
             ids = [ids]
+        if context.get('wiki-maintenance'):
+            return super(wiki_doc, self).write(cr, uid, ids, values, context=context)
         for rec in self.browse(cr, uid, ids, context=context):
             if 'name' in values:
-                name_key = self._name_key(values['name'])
+                name = values['name'] = values['name'].strip()
+                name_key = self._name_key(name)
                 if rec.name_key != name_key and rec.reverse_links:
+                    # do not allow name changes as it would require automatically updating the
+                    # linking documents' text with the new name
                     raise ERPError('invalid name change', 'document is linked to, and change would modify name key')
                 values['name_key'] = name_key
             if 'source_type' in values:
