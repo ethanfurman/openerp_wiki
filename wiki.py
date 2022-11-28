@@ -79,6 +79,7 @@ import openerp
 from openerp import VAR_DIR, SUPERUSER_ID
 from openerp.exceptions import ERPError
 from openerp.osv import osv, fields
+from openerp.tools import self_ids
 import re
 from textwrap import dedent
 from stonemark import Document, escape
@@ -93,19 +94,103 @@ _name_key = translator(
     keep='abcdefghijklmnopqrstuvwxyz_0123456789.-',
     )
 
+WIKI_PATH = Path(VAR_DIR) / 'wiki'
 
-class wiki_doc(osv.AbstractModel):
+def unique(model, cr, uid, ids, context=None):
+    seen = set()
+    for rec in model.read(cr, uid, ids, context=context):
+        tname = _name_key(rec['name'])
+        if tname in seen:
+            return False
+        seen.add(tname)
+    return True
+
+class wiki_key(osv.Model):
+    "wiki categories (i.e. keys)"
+    _name = 'wiki.key'
+    _inherit = []
+    _description = 'wiki key'
+    _order = 'name'
+
+    _columns = {
+        'name': fields.char('Wiki Key', size=64, required=True),
+        'private': fields.boolean('System', help='Omit from Knowledge -> Wiki -> Pages ?', readonly=True),
+        }
+
+    _constraints = [
+        (unique, 'wiki name already in use', ['name']),
+        ]
+
+    def _auto_init(self, cr, context=None, subwiki=None):
+        """
+        ensure each non-system key exists on disk
+        """
+        res = super(wiki_key, self)._auto_init(cr, context)
+        for rec in self.read(cr, SUPERUSER_ID, [('private','=',False)], context=context):
+            wiki_path = wiki_doc._wiki_path / _name_key(rec['name'])
+            if not wiki_path.exists():
+                wiki_path.makedirs()
+        return res
+
+    def create(self, cr, uid, values, context=None):
+        new_id = super(wiki_key, self).create(cr, uid, values, context=context)
+        wiki_path = wiki_doc._wiki_path / _name_key(values['name'])
+        if not wiki_path.exists():
+            wiki_path.makedirs()
+        return new_id
+
+    def write(self, cr, uid, ids, values, context=None):
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        if 'name' in values:
+            current = self.read(cr, uid, ids, values, context=context)
+            current_name = current[0]['name']
+        res = super(wiki_key, self).write(cr, uid, ids, values, context=context)
+        if 'name' in values:
+            old_path = wiki_doc._wiki_path / _name_key(current_name)
+            new_path = wiki_doc._wiki_path / _name_key(values['name'])
+            old_path.move(new_path)
+        return res
+
+    def unlink(self, cr, uid, ids, context=None):
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        wiki_page = self.pool.get('wiki.page')
+        names = [r['name'] for r in self.read(cr, uid, ids, context=context)]
+        if wiki_page.search(cr, uid, [('wiki_key','in',names)], context=context):
+            raise ExceptERP('Wiki Error', 'Cannot delete categories that are in use.')
+        res = super(wiki_key, self).unlink(cr, uid, ids, context=context)
+        for name in names:
+            wiki_path = wiki_doc._wiki_path / _name_key(name)
+            wiki_path.rmdir()
+        return res
+
+
+class wiki_doc(osv.Model):
     "wiki documents"
     _name = 'wiki.page'
     _inherit = []
     _description = 'wiki page'
     _order = 'name'
 
-    _wiki_path = Path(VAR_DIR) / 'wiki'
+    _wiki_path = WIKI_PATH
     _wiki_tables = set()
 
+    def _calc_is_empty(self, cr, uid, ids, field_name, arg, context=None):
+        res = {}.fromkeys(ids, False)
+        for rec in self.read(cr, uid, ids, ['source_doc'], context=context):
+            res[rec['id']] = rec['source_doc'] in (False, '', '[under construction]', '[[under construction]]')
+        return res
+
+    def _select_key(self, cr, uid, context=None):
+        key = self.pool.get('wiki.key')
+        ids = key.search(cr, uid, [('private','=',False)], context=context)
+        res = key.read(cr, uid, ids, ['name', 'id'], context=context)
+        res = [(r['name'], r['name']) for r in res]
+        return res
+
     _columns = {
-        'wiki_key': fields.char('Wiki Key', size=64, help="each logical wiki has its own wiki key"),
+        'wiki_key': fields.selection(_select_key, required=True, string='Wiki Key', help="each logical wiki has its own wiki key"),
         'name': fields.char('Name', size=64, required=True),
         'name_key': fields.char('Name Key', size=64, required=True),
         'source_type': fields.selection(
@@ -125,6 +210,14 @@ class wiki_doc(osv.AbstractModel):
             rel='wiki_links', id1='tgt', id2='src',
             string='Links to page',
             ),
+        'is_empty': fields.function(
+            _calc_is_empty,
+            string='Empty?',
+            type='boolean',
+            store={
+                'wiki.page': (self_ids, ['source_doc','source_type'], 10),
+                },
+            ),
         }
 
     _defaults = {
@@ -141,39 +234,46 @@ class wiki_doc(osv.AbstractModel):
             # record table
             self.__class__._wiki_tables.add(self._name)
             # set file path
-            self._wiki_path = self.__class__._wiki_path / self._defaults['wiki_key']
-            _logger.info('self._wiki_path = %r', self._wiki_path)
+            # self._wiki_path = self.__class__._wiki_path / _name_key(self._defaults['wiki_key'])
 
     def _auto_init(self, cr, context=None):
         res = super(wiki_doc, self)._auto_init(cr, context)
-        if self.__class__.__name__ != 'wiki_doc':
-            if not self._wiki_path.exists():
-                # get our own cursor in case something fails
-                db_name = threading.current_thread().dbname
-                db = openerp.sql_db.db_connect(db_name)
-                wiki_cr = db.cursor()
-                try:
-                    _logger.info('wiki: writing files for %r', self._name)
-                    self._wiki_path.makedirs()
-                    for rec in self.browse(wiki_cr, SUPERUSER_ID, [(1,'=',1)], context=context):
-                        wiki_cr.execute(dedent('''
-                                UPDATE %s 
-                                SET name=%%s, name_key=%%s
-                                WHERE id=%%s
-                                ''' % (self._table, )), (rec.name.strip(), _name_key(rec.name.strip()), rec.id)
-                                )
-                        try:
-                            if rec.source_type == 'txt':
-                                self._write_html_file(wiki_cr, SUPERUSER_ID, rec.id, context=context)
-                            elif rec.source_type == 'img':
-                                self._write_image_file(wiki_cr, SUPERUSER_ID, rec.id, context=context)
-                            else:
-                                _logger.error('rec id %d is missing `source_type`', rec.id)
-                        except Exception:
-                            _logger.exception('error processing %r' % rec.name)
-                    wiki_cr.commit()
-                finally:
-                    wiki_cr.close()
+        if self.__class__.__name__ == 'wiki_doc':
+            subwikis = [
+                    (rec['name'], _name_key(rec['name']))
+                    for rec in self.pool.get('wiki.key').read(cr, SUPERUSER_ID, [('private','=',False)], context=context)
+                    ]
+        else:
+            subwikis = [(self._defaults['wiki_key'], _name_key(self._defaults['wiki_key']))]
+        # get our own cursor in case something fails
+        db_name = threading.current_thread().dbname
+        db = openerp.sql_db.db_connect(db_name)
+        wiki_cr = db.cursor()
+        try:
+            for name, path in subwikis:
+                wiki_path = self._wiki_path / path
+                # if not wiki_path.exists():
+                _logger.info('wiki: writing files for %r to %r', name, wiki_path)
+                wiki_path.makedirs()
+                for rec in self.browse(wiki_cr, SUPERUSER_ID, [('wiki_key','=',name)], context=context):
+                    wiki_cr.execute(dedent('''
+                            UPDATE %s 
+                            SET name=%%s, name_key=%%s
+                            WHERE id=%%s
+                            ''' % (self._table, )), (rec.name.strip(), _name_key(rec.name.strip()), rec.id)
+                            )
+                    try:
+                        if rec.source_type == 'txt':
+                            self._write_html_file(wiki_cr, SUPERUSER_ID, rec.id, context=context)
+                        elif rec.source_type == 'img':
+                            self._write_image_file(wiki_cr, SUPERUSER_ID, rec.id, context=context)
+                        else:
+                            _logger.error('rec id %d is missing `source_type`', rec.id)
+                    except Exception:
+                        _logger.exception('error processing %r' % rec.name)
+            wiki_cr.commit()
+        finally:
+            wiki_cr.close()
         return res
 
     def _write_html_file(self, cr, uid, id, context=None):
@@ -188,11 +288,11 @@ class wiki_doc(osv.AbstractModel):
         rec = self.browse(cr, uid, id, context=context)
         name = rec.name
         title = '%s\n%s\n%s\n\n' % (len(name)*'=', name, len(name)*'=')
-        source_doc = title + rec.source_doc
+        source_doc = title + (rec.source_doc or '')
         document = self._text2html(name, source_doc)
         link = re.compile('(<a href=")([^"]*)(">)')
         document = re.sub(link, repl, document)
-        file = self._wiki_path/self._name_key(name) + '.html'
+        file = self._wiki_path/_name_key(rec['wiki_key'])/_name_key(name) + '.html'
         with open(file, 'w') as fh:
             fh.write(document)
 
@@ -201,7 +301,7 @@ class wiki_doc(osv.AbstractModel):
             [id] = id
         rec = self.browse(cr, uid, id, context=context)
         name = rec.name_key
-        file = self._wiki_path/name
+        file = self._wiki_path/_name_key(rec['wiki_key'])/_name_key(name)
         with open(file, 'w') as fh:
             fh.write(b64decode(rec.source_img))
 
@@ -261,7 +361,6 @@ class wiki_doc(osv.AbstractModel):
             _logger.exception('stonemark unable to convert document %s', name)
             return '<pre>' + escape(source_doc) + '</pre>' 
 
-
     #-----------------------------------------------------------------------------------
     # create: parse links, maybe create empty linked pages
     # write:  same as create, plus maybe remove links
@@ -285,6 +384,7 @@ class wiki_doc(osv.AbstractModel):
         return new_id
 
     def write(self, cr, uid, ids, values, context=None):
+        # TODO: handle changes to wiki_key
         context = context or {}
         if isinstance(ids, (int, long)):
             ids = [ids]

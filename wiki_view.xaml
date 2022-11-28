@@ -1,0 +1,89 @@
+!!! xml1.0
+
+-view = 'ir.ui.view'
+-action = 'ir.actions.act_window'
+-wiki = 'wiki.page'
+
+~openerp
+    ~data
+
+        ~menuitem @Wiki #menu_main_wiki parent='knowledge.menu_document' sequence='10'
+
+        // pages
+
+        ~record model=view #view_main_wiki_tree
+            @name: wiki.page.tree
+            @model: wiki.page
+            @arch type='xml'
+                ~tree $Wiki_Pages
+                    @name
+
+        ~record model=view #view_main_wiki_form
+            @name: wiki.page.form
+            @model: wiki.page
+            @arch type='xml'
+                ~form $Wiki_Page version='7.0'
+                    ~div
+                        ~h1
+                            @name
+                        ~group
+                            @source_type .oe_edit_only widget='radio' options="{'horizontal': 1}"
+                            @wiki_key $Category
+                        ~div attrs="{'invisible': [('source_type','!=','txt')]}"
+                            @source_doc .oe_edit_only placeholder="wiki document..."
+                            @wiki_doc .oe_view_only
+                        ~div attrs="{'invisible': [('source_type','!=','img')]}"
+                            @source_img widget='image'
+                        ~div
+                            ~hr
+                            @reverse_links .oe_view_only widget='many2many_tags'
+
+        ~record model=action #action_main_wiki
+            @name: Wiki
+            @res_model: wiki.page
+            @view_type: form
+            @view_id ref='view_main_wiki_tree'
+            @view_mode: tree,form
+
+        ~menuitem @Pages #menu_main_wiki_pages parent='menu_main_wiki' action='action_main_wiki' sequence='10'
+
+        // categories
+
+        ~record model=view #view_main_wiki_key_tree
+            @name: wiki.key.tree
+            @model: wiki.key
+            @arch type='xml'
+                ~tree $Wiki_Categories
+                    @name
+
+        ~record model=view #view_main_wiki_key_form
+            @name: wiki.key.form
+            @model: wiki.key
+            @arch type='xml'
+                ~form $Wiki_Category version='7.0'
+                    ~group
+                        ~group
+                            @name
+                        ~group
+                            @private .oe_view_only
+
+        ~record model=action #action_main_wiki_key
+            @name: Wiki Category
+            @res_model: wiki.key
+            @view_type: form
+            @view_id ref='view_main_wiki_key_tree'
+            @view_mode: tree,form
+
+        ~menuitem @Categories #menu_main_wiki_keys parent='menu_main_wiki' action='action_main_wiki_key' sequence='20'
+
+        // empty pages
+
+        ~record model=action #action_main_wiki_empty
+            @name: Empty Pages
+            @res_model: wiki.page
+            @view_type: form
+            @view_id ref='view_main_wiki_tree'
+            @view_mode: tree,form
+            @domain: [('is_empty','=',True)]
+
+        ~menuitem name='Empty Pages' #menu_main_wiki_empty parent='menu_main_wiki' action='action_main_wiki_empty' sequence='30'

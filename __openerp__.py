@@ -1,6 +1,6 @@
 {
    'name': 'Wiki',
-    'version': '0.1',
+    'version': '0.2',
     'category': 'Knowledge Management',
     'description': """\
             """,
@@ -9,8 +9,10 @@
     'website': '',
     'depends': [
             "base",
+	    "knowledge",
             ],
     'data': [
+	    'wiki_view.xaml',
 	    'security/ir.model.access.csv',
             ],
     'css': [

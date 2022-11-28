@@ -1,2 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_wiki_page,access_wiki_page,model_wiki_page,,1,1,1,1
+access_wiki_key,access_wiki_key,model_wiki_key,,1,1,1,1
