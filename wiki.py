@@ -158,7 +158,7 @@ class wiki_key(osv.Model):
         wiki_page = self.pool.get('wiki.page')
         names = [r['name'] for r in self.read(cr, uid, ids, context=context)]
         if wiki_page.search(cr, uid, [('wiki_key','in',names)], context=context):
-            raise ExceptERP('Wiki Error', 'Cannot delete categories that are in use.')
+            raise ERPError('Wiki Error', 'Cannot delete categories that are in use.')
         res = super(wiki_key, self).unlink(cr, uid, ids, context=context)
         for name in names:
             wiki_path = wiki_doc._wiki_path / _name_key(name)
@@ -305,7 +305,7 @@ class wiki_doc(osv.Model):
         with open(file, 'w') as fh:
             fh.write(b64decode(rec.source_img))
 
-    def _convert_links(self, cr, uid, id, document, context=None):
+    def _convert_links(self, cr, uid, id, document, category, context=None):
         if not isinstance(id, (int, long)):
             [id] = id
         context = (context or {}).copy()
@@ -321,7 +321,12 @@ class wiki_doc(osv.Model):
                 # create empty image
                 target_ids = [self.create(
                         cr, uid,
-                        values={'name':target, 'source_type':'img', 'source_img':placeholder},
+                        values={
+                            'name': target,
+                            'source_type': 'img',
+                            'source_img': placeholder,
+                            'wiki_key': category,
+                            },
                         context=context,
                         )]
             forward_links.extend(target_ids)
@@ -341,7 +346,11 @@ class wiki_doc(osv.Model):
                 # create empty page
                 target_ids = [self.create(
                         cr, uid,
-                        values={'name':target, 'source_doc':'[[under construction]]'},
+                        values={
+                            'name': target,
+                            'source_doc': '[[under construction]]',
+                            'wiki_key': category,
+                            },
                         context=context,
                         )]
             forward_links.extend(target_ids)
@@ -407,6 +416,7 @@ class wiki_doc(osv.Model):
                     values['source_doc'] = False
                     values['wiki_doc'] = False
                     values['forward_links'] = [(5, False)]
+            wiki_key = values.get('wiki_key', rec.wiki_key)
             source_doc = values.get('source_doc')
             if source_doc:
                 name = values.get('name', rec.name)
@@ -414,6 +424,7 @@ class wiki_doc(osv.Model):
                 document, forward_links = self._convert_links(
                         cr, uid, rec.id,
                         document,
+                        category=wiki_key,
                         context=context,
                         )
                 values['wiki_doc'] = document
