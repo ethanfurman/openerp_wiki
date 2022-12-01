@@ -45,7 +45,7 @@
             @model: wiki.page
             @arch type='xml'
                 ~search $Wiki_Page
-                    ~filter $Not_Empty domain="[('is_empty','=',False)]"
+                    ~filter $Not_Empty @type_not_empty domain="[('is_empty','=',False)]"
                     ~group $Group_By expand='0'
                         ~filter $Category domain='[]' context="{'group_by': 'wiki_key'}"
 
@@ -57,6 +57,7 @@
             @search_view_id ref='view_main_wiki_search'
             @view_mode: tree,form
             @domain: [('source_type','=','txt')]
+            @context: {'search_default_type_not_empty': '1'}
 
         ~menuitem @Pages #menu_main_wiki_pages parent='menu_main_wiki' action='action_main_wiki_pages' sequence='10'
 
