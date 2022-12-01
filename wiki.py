@@ -156,6 +156,13 @@ class wiki_key(osv.Model):
             current_name = current[0]['name']
         res = super(wiki_key, self).write(cr, uid, ids, values, context=context)
         if 'name' in values:
+            # update any pages in this categary
+            ctx = context or {}
+            ctx['wiki-maintenance'] = True
+            wiki_page = self.pool.get('wiki.page')
+            affected_ids = wiki_page.search(cr, uid, [('wiki_key','=',current_name)], context=context)
+            wiki_page.write(cr, uid, affected_ids, {'wiki_key': values['name']}, context=ctx)
+            # and rename the on-disk directory
             old_path = wiki_doc._wiki_path / name_key(current_name)
             new_path = wiki_doc._wiki_path / name_key(values['name'])
             old_path.move(new_path)
