@@ -418,13 +418,17 @@ class wiki_doc(osv.Model):
             return super(wiki_doc, self).write(cr, uid, ids, values, context=context)
         for rec in self.browse(cr, uid, ids, context=context):
             if 'name' in values:
+                # save old name so old file can be deleted
+                old_file = self._wiki_path / name_key(rec.wiki_key) / rec.name_key
+                if rec.source_type == 'txt':
+                    old_file += '.html'
                 name = values['name'] = values['name'].strip()
-                name_key = self.name_key(name)
-                if rec.name_key != name_key and rec.reverse_links:
+                new_name_key = self.name_key(name)
+                if rec.name_key != new_name_key and rec.reverse_links:
                     # do not allow name changes as it would require automatically updating the
                     # linking documents' text with the new name
                     raise ERPError('invalid name change', 'document is linked to, and change would modify name key')
-                values['name_key'] = name_key
+                values['name_key'] = new_name_key
             if 'source_type' in values:
                 st = values['source_type']
                 if st == 'txt':
@@ -469,6 +473,10 @@ class wiki_doc(osv.Model):
                     values['wiki_img'] = b64encode(new_image_stream.getvalue())
             if not super(wiki_doc, self).write(cr, uid, ids, values, context=context):
                 return False
+            try:
+                old_file.unlink()
+            except Exception:
+                _logger.exception('unable to delete file')
         for rec in self.browse(cr, uid, ids, context=context):
             if rec.source_type == 'img':
                 self._write_image_file(cr, uid, rec.id, context=context)
