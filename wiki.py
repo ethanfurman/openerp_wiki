@@ -310,7 +310,7 @@ class wiki_doc(osv.Model):
         document = self._text2html(name, source_doc)
         link = re.compile('(<a href=")([^"]*)(">)')
         document = re.sub(link, repl, document)
-        file = self._wiki_path/name_key(rec['wiki_key'])/name_key(name) + '.html'
+        file = self._wiki_path/name_key(rec.wiki_key)/rec.name_key + '.html'
         with open(file, 'w') as fh:
             fh.write(document)
 
@@ -318,8 +318,7 @@ class wiki_doc(osv.Model):
         if not isinstance(id, (int, long)):
             [id] = id
         rec = self.browse(cr, uid, id, context=context)
-        name = rec.name_key
-        file = self._wiki_path/name_key(rec['wiki_key'])/name_key(name)
+        file = self._wiki_path/name_key(rec.wiki_key)/rec.name_key
         with open(file, 'w') as fh:
             fh.write(b64decode(rec.source_img))
 
@@ -489,9 +488,9 @@ class wiki_doc(osv.Model):
                 raise ERPError('linked document', 'cannot delete %r as other documents link to it' % rec.name)
             forward_ids.extend([f.id for f in rec.forward_links])
             if rec.source_type == 'txt':
-                files.append(self._wiki_path/'%s.html' % rec.name_key)
+                files.append(self._wiki_path/name_key(rec.wiki_key)/rec.name_key + '.html')
             else: # image file
-                files.append(self._wiki_path/rec.name_key)
+                files.append(self._wiki_path/name_key(rec.wiki_key)/rec.name_key)
         if not super(wiki_doc, self).unlink(cr, uid, ids, context=context):
             return False
         # records successfully deleted
