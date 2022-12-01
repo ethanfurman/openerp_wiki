@@ -92,17 +92,23 @@ from VSS.utils import translator
 _logger = logging.getLogger(__name__)
 
 _name_key = translator(
-     frm='ABCDEFGHIJKLMNOPQRSTUVWXYZ +/',
-      to='abcdefghijklmnopqrstuvwxyz_--',
+     frm=' +/',
+      to='_--',
     keep='abcdefghijklmnopqrstuvwxyz_0123456789.-',
     )
+
+def name_key(name):
+    name = re.sub(r' ?- ?', '-', name.lower().strip())
+    name = re.sub(r' +', ' ', name)
+    name = _name_key(name)
+    return name
 
 WIKI_PATH = Path(VAR_DIR) / 'wiki'
 
 def unique(model, cr, uid, ids, context=None):
     seen = set()
     for rec in model.read(cr, uid, ids, context=context):
-        tname = _name_key(rec['name'])
+        tname = name_key(rec['name'])
         if tname in seen:
             return False
         seen.add(tname)
@@ -130,14 +136,14 @@ class wiki_key(osv.Model):
         """
         res = super(wiki_key, self)._auto_init(cr, context)
         for rec in self.read(cr, SUPERUSER_ID, [('private','=',False)], context=context):
-            wiki_path = wiki_doc._wiki_path / _name_key(rec['name'])
+            wiki_path = wiki_doc._wiki_path / name_key(rec['name'])
             if not wiki_path.exists():
                 wiki_path.makedirs()
         return res
 
     def create(self, cr, uid, values, context=None):
         new_id = super(wiki_key, self).create(cr, uid, values, context=context)
-        wiki_path = wiki_doc._wiki_path / _name_key(values['name'])
+        wiki_path = wiki_doc._wiki_path / name_key(values['name'])
         if not wiki_path.exists():
             wiki_path.makedirs()
         return new_id
@@ -150,8 +156,8 @@ class wiki_key(osv.Model):
             current_name = current[0]['name']
         res = super(wiki_key, self).write(cr, uid, ids, values, context=context)
         if 'name' in values:
-            old_path = wiki_doc._wiki_path / _name_key(current_name)
-            new_path = wiki_doc._wiki_path / _name_key(values['name'])
+            old_path = wiki_doc._wiki_path / name_key(current_name)
+            new_path = wiki_doc._wiki_path / name_key(values['name'])
             old_path.move(new_path)
         return res
 
@@ -164,7 +170,7 @@ class wiki_key(osv.Model):
             raise ERPError('Wiki Error', 'Cannot delete categories that are in use.')
         res = super(wiki_key, self).unlink(cr, uid, ids, context=context)
         for name in names:
-            wiki_path = wiki_doc._wiki_path / _name_key(name)
+            wiki_path = wiki_doc._wiki_path / name_key(name)
             wiki_path.rmdir()
         return res
 
@@ -246,17 +252,17 @@ class wiki_doc(osv.Model):
             # record table
             self.__class__._wiki_tables.add(self._name)
             # set file path
-            # self._wiki_path = self.__class__._wiki_path / _name_key(self._defaults['wiki_key'])
+            # self._wiki_path = self.__class__._wiki_path / name_key(self._defaults['wiki_key'])
 
     def _auto_init(self, cr, context=None):
         res = super(wiki_doc, self)._auto_init(cr, context)
         if self.__class__.__name__ == 'wiki_doc':
             subwikis = [
-                    (rec['name'], _name_key(rec['name']))
+                    (rec['name'], name_key(rec['name']))
                     for rec in self.pool.get('wiki.key').read(cr, SUPERUSER_ID, [('private','=',False)], context=context)
                     ]
         else:
-            subwikis = [(self._defaults['wiki_key'], _name_key(self._defaults['wiki_key']))]
+            subwikis = [(self._defaults['wiki_key'], name_key(self._defaults['wiki_key']))]
         # get our own cursor in case something fails
         db_name = threading.current_thread().dbname
         db = openerp.sql_db.db_connect(db_name)
@@ -272,7 +278,7 @@ class wiki_doc(osv.Model):
                             UPDATE %s 
                             SET name=%%s, name_key=%%s
                             WHERE id=%%s
-                            ''' % (self._table, )), (rec.name.strip(), _name_key(rec.name.strip()), rec.id)
+                            ''' % (self._table, )), (rec.name.strip(), name_key(rec.name.strip()), rec.id)
                             )
                     try:
                         if rec.source_type == 'txt':
@@ -295,7 +301,7 @@ class wiki_doc(osv.Model):
             href, target, close = mo.groups()
             if target.startswith('http'):
                 return href + target + close
-            key = self._name_key(target)
+            key = self.name_key(target)
             return "%s%s.html%s" % (href, key, close)
         rec = self.browse(cr, uid, id, context=context)
         name = rec.name
@@ -304,7 +310,7 @@ class wiki_doc(osv.Model):
         document = self._text2html(name, source_doc)
         link = re.compile('(<a href=")([^"]*)(">)')
         document = re.sub(link, repl, document)
-        file = self._wiki_path/_name_key(rec['wiki_key'])/_name_key(name) + '.html'
+        file = self._wiki_path/name_key(rec['wiki_key'])/name_key(name) + '.html'
         with open(file, 'w') as fh:
             fh.write(document)
 
@@ -313,7 +319,7 @@ class wiki_doc(osv.Model):
             [id] = id
         rec = self.browse(cr, uid, id, context=context)
         name = rec.name_key
-        file = self._wiki_path/_name_key(rec['wiki_key'])/_name_key(name)
+        file = self._wiki_path/name_key(rec['wiki_key'])/name_key(name)
         with open(file, 'w') as fh:
             fh.write(b64decode(rec.source_img))
 
@@ -327,7 +333,7 @@ class wiki_doc(osv.Model):
             src, target, close = mo.groups()
             if target.startswith('http'):
                 return src + target + close
-            key = self._name_key(target)
+            key = self.name_key(target)
             target_ids = self.search(cr, uid, [('name_key','=',key)], context=context)
             if not target_ids:
                 # create empty image
@@ -352,7 +358,7 @@ class wiki_doc(osv.Model):
             href, target, close = mo.groups()
             if target.startswith('http'):
                 return href + target + close
-            key = self._name_key(target)
+            key = self.name_key(target)
             target_ids = self.search(cr, uid, [('name_key','=',key)], context=context)
             if not target_ids:
                 # create empty page
@@ -373,7 +379,7 @@ class wiki_doc(osv.Model):
         document = re.sub(img_link, repl_image_link, document)
         return document, forward_links
 
-    _name_key = staticmethod(_name_key)
+    name_key = staticmethod(name_key)
 
     def _text2html(self, name, source_doc, context=None):
         try:
@@ -397,7 +403,7 @@ class wiki_doc(osv.Model):
         if context is None:
             context = {}
         name = values['name'] = values['name'].strip()
-        values['name_key'] = _name_key(name)
+        values['name_key'] = name_key(name)
         new_id = super(wiki_doc, self).create(cr, uid, values, context=context)
         del values['name']
         del values['name_key']
@@ -414,7 +420,7 @@ class wiki_doc(osv.Model):
         for rec in self.browse(cr, uid, ids, context=context):
             if 'name' in values:
                 name = values['name'] = values['name'].strip()
-                name_key = self._name_key(name)
+                name_key = self.name_key(name)
                 if rec.name_key != name_key and rec.reverse_links:
                     # do not allow name changes as it would require automatically updating the
                     # linking documents' text with the new name
