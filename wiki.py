@@ -73,13 +73,16 @@ example `_view.xaml` file
 """
 
 from antipathy import Path
-from base64 import b64decode
+from base64 import b64decode, b64encode
+import io
 import logging
 import openerp
 from openerp import VAR_DIR, SUPERUSER_ID
 from openerp.exceptions import ERPError
 from openerp.osv import osv, fields
 from openerp.tools import self_ids
+import os
+from PIL import Image, ImageOps
 import re
 from textwrap import dedent
 from stonemark import Document, escape
@@ -178,8 +181,16 @@ class wiki_doc(osv.Model):
 
     def _calc_is_empty(self, cr, uid, ids, field_name, arg, context=None):
         res = {}.fromkeys(ids, False)
-        for rec in self.read(cr, uid, ids, ['source_doc'], context=context):
-            res[rec['id']] = rec['source_doc'] in (False, '', '[under construction]', '[[under construction]]')
+        for rec in self.read(cr, uid, ids, ['source_doc','source_img','source_type'], context=context):
+            type = rec['source_type']
+            doc = rec['source_doc']
+            img = rec['source_img']
+            if type == 'txt' and doc in (False, '', '[under construction]', '[[under construction]]'):
+                res[rec['id']] = True
+            elif type == 'img' and img in (False, placeholder):
+                res[rec['id']] = True
+            else:
+                res[rec['id']] = False
         return res
 
     def _select_key(self, cr, uid, context=None):
@@ -200,6 +211,7 @@ class wiki_doc(osv.Model):
         'source_doc': fields.text('Source Document', ),
         'source_img': fields.binary('Source Image', ),
         'wiki_doc': fields.html('Wiki Document'),
+        'wiki_img': fields.binary(string="Wiki-sized image"),
         'forward_links': fields.many2many(
             'wiki.page',
             rel='wiki_links', id1='src', id2='tgt',
@@ -215,7 +227,7 @@ class wiki_doc(osv.Model):
             string='Empty?',
             type='boolean',
             store={
-                'wiki.page': (self_ids, ['source_doc','source_type'], 10),
+                'wiki.page': (self_ids, ['source_doc','source_type','source_img'], 10),
                 },
             ),
         }
@@ -412,12 +424,14 @@ class wiki_doc(osv.Model):
                 st = values['source_type']
                 if st == 'txt':
                     values['source_img'] = False
+                    values['wiki_img'] = False
                 else:  # 'img'
                     values['source_doc'] = False
                     values['wiki_doc'] = False
                     values['forward_links'] = [(5, False)]
             wiki_key = values.get('wiki_key', rec.wiki_key)
             source_doc = values.get('source_doc')
+            source_img = values.get('source_img')
             if source_doc:
                 name = values.get('name', rec.name)
                 document = self._text2html(name, source_doc)
@@ -432,6 +446,22 @@ class wiki_doc(osv.Model):
                     values['forward_links'] = [(6, 0, forward_links)]
                 else:
                     values['forward_links'] = [(5, False)]
+            if source_img:
+                name = values.get('name', rec.name)
+                values['wiki_img'] = values['source_img']
+                file_type = os.path.splitext(name)
+                image_stream = io.BytesIO(b64decode(values['source_img']))
+                image = Image.open(image_stream)
+                target_width = 1024
+                if target_width < image.size[0]:
+                    target_height = int(image.size[1] * (float(target_width) / image.size[0]))
+                    size = target_width, target_height
+                    image = ImageOps.fit(image, size, Image.ANTIALIAS)
+                    if image.mode not in ["1", "L", "P", "RGB", "RGBA"]:
+                        image = image.convert("RGB")
+                    new_image_stream = io.BytesIO()
+                    image.save(new_image_stream, file_type)
+                    values['wiki_img'] = b64encode(new_image_stream.getvalue())
             if not super(wiki_doc, self).write(cr, uid, ids, values, context=context):
                 return False
         for rec in self.browse(cr, uid, ids, context=context):

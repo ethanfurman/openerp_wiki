@@ -9,7 +9,7 @@
 
         ~menuitem @Wiki #menu_main_wiki parent='knowledge.menu_document' sequence='10'
 
-        // pages
+        // pages & images
 
         ~record model=view #view_main_wiki_tree
             @name: wiki.page.tree
@@ -17,6 +17,7 @@
             @arch type='xml'
                 ~tree $Wiki_Pages
                     @name
+                    @wiki_key $Category
 
         ~record model=view #view_main_wiki_form
             @name: wiki.page.form
@@ -33,19 +34,42 @@
                             @source_doc .oe_edit_only placeholder="wiki document..."
                             @wiki_doc .oe_view_only
                         ~div attrs="{'invisible': [('source_type','!=','img')]}"
-                            @source_img widget='image'
+                            @source_img widget='image' .oe_edit_only
+                            @wiki_img widget='image' .oe_view_only
                         ~div
                             ~hr
                             @reverse_links .oe_view_only widget='many2many_tags'
 
-        ~record model=action #action_main_wiki
+        ~record model=view #view_main_wiki_search
+            @name: wiki.page.search
+            @model: wiki.page
+            @arch type='xml'
+                ~search $Wiki_Page
+                    ~filter $Not_Empty domain="[('is_empty','=',False)]"
+                    ~group $Group_By expand='0'
+                        ~filter $Category domain='[]' context="{'group_by': 'wiki_key'}"
+
+        ~record model=action #action_main_wiki_pages
             @name: Wiki
             @res_model: wiki.page
             @view_type: form
             @view_id ref='view_main_wiki_tree'
+            @search_view_id ref='view_main_wiki_search'
             @view_mode: tree,form
+            @domain: [('source_type','=','txt')]
 
-        ~menuitem @Pages #menu_main_wiki_pages parent='menu_main_wiki' action='action_main_wiki' sequence='10'
+        ~menuitem @Pages #menu_main_wiki_pages parent='menu_main_wiki' action='action_main_wiki_pages' sequence='10'
+
+        ~record model=action #action_main_wiki_images
+            @name: Wiki Images
+            @res_model: wiki.page
+            @view_type: form
+            @view_id ref='view_main_wiki_tree'
+            @search_view_id ref='view_main_wiki_search'
+            @view_mode: tree,form
+            @domain: [('source_type','=','img')]
+
+        ~menuitem @Images #menu_main_wiki_images parent='menu_main_wiki' action='action_main_wiki_images' sequence='15'
 
         // categories
 
@@ -79,7 +103,7 @@
         // empty pages
 
         ~record model=action #action_main_wiki_empty
-            @name: Empty Pages
+            @name: Wiki Empty Pages
             @res_model: wiki.page
             @view_type: form
             @view_id ref='view_main_wiki_tree'
