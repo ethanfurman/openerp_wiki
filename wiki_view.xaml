@@ -29,7 +29,7 @@
                             @name
                         ~group
                             @source_type .oe_edit_only widget='radio' options="{'horizontal': 1}"
-                            @wiki_key $Category
+                            @wiki_key $Category on_change="onchange_wiki_key(wiki_key, source_doc)"
                         ~div attrs="{'invisible': [('source_type','!=','txt')]}"
                             @source_doc .oe_edit_only placeholder="wiki document..."
                             @wiki_doc .oe_view_only
@@ -91,6 +91,8 @@
                             @name
                         ~group
                             @private .oe_view_only
+                    ~label for='template'
+                    @template
 
         ~record model=action #action_main_wiki_key
             @name: Wiki Category

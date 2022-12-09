@@ -124,6 +124,7 @@ class wiki_key(osv.Model):
     _columns = {
         'name': fields.char('Wiki Key', size=64, required=True),
         'private': fields.boolean('System', help='Omit from Knowledge -> Wiki -> Pages ?', readonly=True),
+        'template': fields.text('Template'),
         }
 
     _constraints = [
@@ -424,6 +425,7 @@ class wiki_doc(osv.Model):
         if context.get('wiki-maintenance'):
             return super(wiki_doc, self).write(cr, uid, ids, values, context=context)
         for rec in self.browse(cr, uid, ids, context=context):
+            old_file = None
             if 'name' in values:
                 # save old name so old file can be deleted
                 old_file = self._wiki_path / name_key(rec.wiki_key) / rec.name_key
@@ -481,7 +483,7 @@ class wiki_doc(osv.Model):
             if not super(wiki_doc, self).write(cr, uid, ids, values, context=context):
                 return False
             try:
-                old_file.unlink()
+                old_file and old_file.unlink()
             except Exception:
                 _logger.exception('unable to delete file')
         for rec in self.browse(cr, uid, ids, context=context):
@@ -516,6 +518,15 @@ class wiki_doc(osv.Model):
             except Exception:
                 _logger.exception('unable to delete file')
         return True
+
+    def onchange_wiki_key(self, cr, uid, id, wiki_key, source_doc, context=None):
+        res = {}
+        if wiki_key and not source_doc:
+            key_model = self.pool.get('wiki.key')
+            [key] = key_model.read(cr, uid, [('name','=',wiki_key)], fields=['template'], context=context)
+            res['value'] = {'source_doc': key['template']}
+        return res
+
 
 placeholder = """\
 iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAACXBIWXMAAABIAAAASABGyWs+AAAACXZwQWcAAABAAAAAQAD\
