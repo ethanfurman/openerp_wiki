@@ -30,6 +30,7 @@
                         ~group
                             @source_type .oe_edit_only widget='radio' options="{'horizontal': 1}"
                             @wiki_key $Category on_change="onchange_wiki_key(wiki_key, source_doc)"
+                            @top_level .oe_edit_only
                         ~div attrs="{'invisible': [('source_type','!=','txt')]}"
                             @source_doc .oe_edit_only placeholder="wiki document..."
                             @wiki_doc .oe_view_only
@@ -45,6 +46,7 @@
             @model: wiki.page
             @arch type='xml'
                 ~search $Wiki_Page
+                    ~filter $Top_Level_Pages @type_top_level domain="[('top_level','=',True)]"
                     ~filter $Not_Empty @type_not_empty domain="[('is_empty','=',False)]"
                     ~group $Group_By expand='0'
                         ~filter $Category domain='[]' context="{'group_by': 'wiki_key'}"
@@ -57,7 +59,7 @@
             @search_view_id ref='view_main_wiki_search'
             @view_mode: tree,form
             @domain: [('source_type','=','txt')]
-            @context: {'search_default_type_not_empty': '1'}
+            @context: {'search_default_type_top_level': '1'}
 
         ~menuitem @Pages #menu_main_wiki_pages parent='menu_main_wiki' action='action_main_wiki_pages' sequence='10'
 

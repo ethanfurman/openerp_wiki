@@ -218,6 +218,7 @@ class wiki_doc(osv.Model):
         'wiki_key': fields.selection(_select_key, required=True, string='Wiki Key', help="each logical wiki has its own wiki key"),
         'name': fields.char('Name', size=64, required=True),
         'name_key': fields.char('Name Key', size=64, required=True),
+        'top_level': fields.boolean('Top level doc', help="Top level docs are shown by default."),
         'source_type': fields.selection(
                 (('txt', 'Text'), ('img', 'Image')),
                 'Source Type',
@@ -248,6 +249,7 @@ class wiki_doc(osv.Model):
 
     _defaults = {
         'source_type': 'txt',
+        'top_level': False,
         }
 
     _sql_constraints = [
