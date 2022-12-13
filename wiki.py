@@ -466,13 +466,13 @@ class wiki_doc(osv.Model):
                         )
                 values['wiki_doc'] = document
                 if forward_links:
-                    values['forward_links'] = [(6, 0, forward_links)]
+                    values['forward_links'] = [(6, 0, list(set(forward_links)))]
                 else:
                     values['forward_links'] = [(5, False)]
             if source_img:
                 name = values.get('name', rec.name)
                 values['wiki_img'] = values['source_img']
-                file_type = os.path.splitext(name)
+                file_type = os.path.splitext(name)[1]
                 image_stream = io.BytesIO(b64decode(values['source_img']))
                 image = Image.open(image_stream)
                 target_width = 1024
