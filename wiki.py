@@ -365,7 +365,10 @@ class wiki_doc(osv.Model):
                     )
         def repl_page_link(mo):
             href, target, close = mo.groups()
-            if target.startswith('http'):
+            if target.startswith((
+                    'http',         # external link
+                    '#footnote-',   # footnote link
+                )):
                 return href + target + close
             key = self.name_key(target)
             target_ids = self.search(cr, uid, [('name_key','=',key)], context=context)
