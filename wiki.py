@@ -339,9 +339,9 @@ class wiki_doc(osv.Model):
         context['wiki_reverse_link'] = id
         forward_links = []
         def repl_image_link(mo):
-            src, target, close = mo.groups()
+            src, target, attrs, close = mo.groups()
             if target.startswith('http'):
-                return src + target + close
+                return src + target + attrs + close
             key = self.name_key(target)
             target_ids = self.search(cr, uid, [('name_key','=',key)], context=context)
             if not target_ids:
@@ -357,10 +357,12 @@ class wiki_doc(osv.Model):
                         context=context,
                         )]
             forward_links.extend(target_ids)
-            return "%s/wiki/image?model=%s&img_id=%d%s" % (
+            return '<a href="#id=%d">%s/wiki/image?model=%s&img_id=%d%s%s</a>' % (
+                    target_ids[0],
                     src,
                     self._name,
                     target_ids[0],
+                    attrs,
                     close,
                     )
         def repl_page_link(mo):
@@ -386,7 +388,7 @@ class wiki_doc(osv.Model):
             forward_links.extend(target_ids)
             return "%s#id=%d%s" % (href, target_ids[0], close)
         web_link = re.compile('(<a href=")([^"]*)(">)')
-        img_link = re.compile('(<img src=")([^"]*)(")')
+        img_link = re.compile('(<img src=")([^"]*)(")([^>]*>)')
         document = re.sub(web_link, repl_page_link, document)
         document = re.sub(img_link, repl_image_link, document)
         return document, forward_links
@@ -397,7 +399,7 @@ class wiki_doc(osv.Model):
         try:
             return Document(source_doc).to_html()
         except Exception:
-            _logger.exception('stonemark unable to convert document %s', name)
+            _logger.exception('stonemark unable to convert document <%s>', name)
             return '<pre>' + escape(source_doc) + '</pre>' 
 
     #-----------------------------------------------------------------------------------
