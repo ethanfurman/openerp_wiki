@@ -27,48 +27,64 @@ example `_view.xaml` file
 
     !!! coding: utf-8
     !!! xml1.0
-    
+
     -view = 'ir.ui.view'
     -action = 'ir.actions.act_window'
     -wiki = 'some.wiki'
-    
+
     ~openerp
         ~data
             // Wiki
-    
+
             ~record model=view #view_some_wiki_tree
                 @name: some.wiki.tree
                 @model: = wiki
                 @arch type='xml'
                     ~tree $Wiki_Pages
                         @name
-    
-            ~record model=view #view_some_wiki_form
-                @name: some.wiki.form
-                @model: = wiki
-                @arch type='xml'
-                    ~form $Wiki_Document version='7.0'
+
+        ~record model=view #view_some_wiki_form
+            @name: some.wiki.form
+            @model: = wiki
+            @arch type='xml'
+                ~form $Wiki_Document version='7.0'
+                    ~div
+                        ~h1
+                            @name
+                        ~group
+                            @source_type .oe_edit_only widget='radio' options="{'horizontal': 1}"
+                            @top_level .oe_edit_only
+                        ~div attrs="{'invisible': [('source_type','!=','txt')]}"
+                            @source_doc .oe_edit_only placeholder="wiki document..."
+                            @wiki_doc .oe_view_only
+                        ~div attrs="{'invisible': [('source_type','!=','img')]}"
+                            @source_img widget='image' .oe_edit_only
+                            @wiki_img widget='image' .oe_view_only
                         ~div
-                            ~h1
-                                @name
-                            ~label for='source_type' string='Document type'
-                            @source_type
-                            ~div attrs="{'invisible': [('source_type','!=','txt')]}"
-                                @source_doc .oe_edit_only placeholder="wiki document..."
-                                @wiki_doc .oe_view_only
-                            ~div attrs="{'invisible': [('source_type','!=','img')]}"
-                                @source_img
                             ~hr
-                            ~label for='reverse_links' string='Pages linking here:'
-                            @reverse_links widget='many2many_tags'
-    
-            ~record model=action #action_some_wiki
-                @name: Wiki
-                @res_model: = wiki
-                @view_type: form
-                @view_id ref='view_some_wiki_tree'
-                @view_mode: tree,form
-    
+                            @reverse_links .oe_view_only widget='many2many_tags'
+
+        ~record model=view #view_main_wiki_search
+            @name: wiki.page.search
+            @model: wiki.page
+            @arch type='xml'
+                ~search $Wiki_Page
+                    ~filter $Top_Level_Pages @type_top_level domain="[('top_level','=',True)]"
+                    ~separator
+                    ~filter $Documents @type_document domain="[('source_type','=','txt')]"
+                    ~filter $Images @type_images domain="[('source_type','=','img')]"
+                    ~separator
+                    ~filter $Empty @type_empty domain="[('is_empty','=',True)]"
+                    ~filter $Not_Empty @type_not_empty domain="[('is_empty','=',False)]"
+
+        ~record model=action #action_some_wiki
+            @name: Wiki
+            @res_model: = wiki
+            @view_type: form
+            @view_id ref='view_some_wiki_tree'
+            @view_mode: tree,form
+            @context: {'search_default_type_top_level':'1', 'search_default_type_document':'1', 'search_default_type_not_empty':'1'}
+
             ~menuitem @Wiki #menu_some_wiki parent='<some_wiki_parent>' action='action_some_wiki' sequence='40'
 """
 
@@ -285,7 +301,7 @@ class wiki_doc(osv.Model):
                 wiki_path.makedirs()
                 for rec in self.browse(wiki_cr, SUPERUSER_ID, [('wiki_key','=',name)], context=context):
                     wiki_cr.execute(dedent('''
-                            UPDATE %s 
+                            UPDATE %s
                             SET name=%%s, name_key=%%s
                             WHERE id=%%s
                             ''' % (self._table, )), (rec.name.strip(), name_key(rec.name.strip()), rec.id)
@@ -400,7 +416,7 @@ class wiki_doc(osv.Model):
             return Document(source_doc).to_html()
         except Exception:
             _logger.exception('stonemark unable to convert document <%s>', name)
-            return '<pre>' + escape(source_doc) + '</pre>' 
+            return '<pre>' + escape(source_doc) + '</pre>'
 
     #-----------------------------------------------------------------------------------
     # create: parse links, maybe create empty linked pages
