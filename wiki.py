@@ -115,9 +115,11 @@ _name_key = translator(
     )
 
 def name_key(name):
+    name = name.replace('&','and')
     name = re.sub(r' ?- ?', '-', name.lower().strip())
     name = re.sub(r' +', ' ', name)
     name = _name_key(name)
+    name = re.sub(r'_+', '_', name)
     return name
 
 WIKI_PATH = Path(VAR_DIR) / 'wiki'
