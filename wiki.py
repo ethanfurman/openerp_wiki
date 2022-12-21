@@ -497,10 +497,10 @@ class wiki_doc(osv.Model):
             if source_img:
                 name = values.get('name', rec.name)
                 values['wiki_img'] = values['source_img']
-                file_type = os.path.splitext(name)[1]
+                file_type = os.path.splitext(name)[1][1:]  # strip leading period
                 image_stream = io.BytesIO(b64decode(values['source_img']))
                 image = Image.open(image_stream)
-                target_width = 1024
+                target_width = 900
                 if target_width < image.size[0]:
                     target_height = int(image.size[1] * (float(target_width) / image.size[0]))
                     size = target_width, target_height
