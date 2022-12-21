@@ -90,6 +90,7 @@ example `_view.xaml` file
 
 from antipathy import Path
 from base64 import b64decode, b64encode
+import codecs
 import io
 import logging
 import openerp
@@ -337,7 +338,7 @@ class wiki_doc(osv.Model):
         link = re.compile('(<a href=")([^"]*)(">)')
         document = re.sub(link, repl, document)
         file = self._wiki_path/name_key(rec.wiki_key)/rec.name_key + '.html'
-        with open(file, 'w') as fh:
+        with codecs.open(file, 'w', encoding='utf8') as fh:
             fh.write(document)
 
     def _write_image_file(self, cr, uid, id, context=None):
