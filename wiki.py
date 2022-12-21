@@ -280,8 +280,6 @@ class wiki_doc(osv.Model):
         if self.__class__.__name__ != 'wiki_doc':
             # record table
             self.__class__._wiki_tables.add(self._name)
-            # set file path
-            # self._wiki_path = self.__class__._wiki_path / name_key(self._defaults['wiki_key'])
 
     def _auto_init(self, cr, context=None):
         res = super(wiki_doc, self)._auto_init(cr, context)
@@ -311,9 +309,9 @@ class wiki_doc(osv.Model):
                             )
                     try:
                         if rec.source_type == 'txt':
-                            self._write_html_file(wiki_cr, SUPERUSER_ID, rec.id, context=context)
+                            self.write(wiki_cr, SUPERUSER_ID, rec.id, {'source_doc': rec.source_doc}, context=context)
                         elif rec.source_type == 'img':
-                            self._write_image_file(wiki_cr, SUPERUSER_ID, rec.id, context=context)
+                            self.write(wiki_cr, SUPERUSER_ID, rec.id, {'source_img': rec.source_img}, context=context)
                         else:
                             _logger.error('rec id %d is missing `source_type`', rec.id)
                     except Exception:
