@@ -1,5 +1,9 @@
 @charset "utf-8";
-/* adapted from Dom (dcode) at [https://dev.to/dcodeyt/creating-beautiful-html-tables-with-css-428l]
+/*
+ *  portions adapted from:
+ *  - Chris Coyier [https://css-tricks.com/snippets/css/simple-and-nice-blockquote-styling/]
+ *  - Dom (dcode) at [https://dev.to/dcodeyt/creating-beautiful-html-tables-with-css-428l]
+ *  - [https://css-tricks.com/styling-code-in-and-out-of-blocks/]
  */
 .wiki table {
     border-collapse: collapse;
@@ -47,11 +51,7 @@
   max-width: 225px;
 }
 
-/*
- * adapted from Chris Coyier [https://css-tricks.com/snippets/css/simple-and-nice-blockquote-styling/]
- * --------------------------------------------------------------------------------------
- */
-blockquote {
+.wiki blockquote {
   background: #f9f9f9;
   border-left: 10px solid #ccc;
   margin: 1.5em 10px;
@@ -59,7 +59,7 @@ blockquote {
   quotes: "\201C""\201D""\2018""\2019";
 }
 
-blockquote:before {
+.wiki blockquote:before {
   color: #ccc;
   content: open-quote;
   font-size: 4em;
@@ -68,36 +68,33 @@ blockquote:before {
   vertical-align: -0.4em;
 }
 
-blockquote p {
+.wiki blockquote p {
   display: inline;
 }
-/*
- * adapted from [https://css-tricks.com/styling-code-in-and-out-of-blocks/]
- */
 
 /* For all <code> */
-code {
+.wiki code {
   font-family: monospace;
   font-size: inherit;
   background: #efefff;
 }
 
 /* Code in text */
-p > code,
-li > code,
-dd > code,
-td > code {
+.wiki p > code,
+.wiki li > code,
+.wiki dd > code,
+.wiki td > code {
   word-wrap: break-word;
   box-decoration-break: clone;
   padding: .1rem .3rem .2rem;
   border-radius: .75rem;
 }
 
-h1 > code,
-h2 > code,
-h3 > code,
-h4 > code,
-h5 > code {
+.wiki h1 > code,
+.wiki h2 > code,
+.wiki h3 > code,
+.wiki h4 > code,
+.wiki h5 > code {
   padding: .1rem .3rem .2rem;
   border-radius: .2rem;
   background: inherit;
@@ -105,7 +102,7 @@ h5 > code {
   border-radius: .5rem;
 }
 
-pre code {
+.wiki pre code {
   display: block;
   white-space: pre;
   -webkit-overflow-scrolling: touch;
@@ -117,3 +114,61 @@ pre code {
   border-radius: .2rem;
 }
 
+.wiki sup {
+  padding: 0px 3px;
+  }
+
+.wiki .footnote {
+  padding: 5px 0px;
+  }
+
+*
+.wiki ol,
+.wiki ul {
+    padding: 0px 15px;
+}
+
+.wiki li {
+  padding: 2px;
+}
+
+.wiki h1 { 
+    display: block !important;
+    font-size: 2em !important;
+    margin-top: 0.25em !important;
+    margin-bottom: 0em !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    font-weight: bold !important;
+}
+
+.wiki h2 {
+    display: block !important;
+    font-size: 1.5em !important;
+    margin-top: 1.25em !important;
+    margin-bottom: 0em !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    font-weight: bold !important;
+}
+
+.wiki h3 { 
+    display: block !important;
+    font-size: 1.25 !important;
+    margin-top: 1.25em !important;
+    margin-bottom: 0em !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    font-weight: bold !important;
+}
+
+.wiki h4 { 
+    display: block !important;
+    font-size: 1.0em !important;
+    margin-top: 1.25em !important;
+    margin-bottom: 0em !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    font-weight: bold !important;
+    font-style: italic !important;
+}
