@@ -15,8 +15,9 @@
 	    'wiki_view.xaml',
 	    'security/ir.model.access.csv',
             ],
-    'css': [
-            ],
+    'css':[
+        'static/src/css/wiki.css',
+        ],
     'js': [
             ],
     'test': [],

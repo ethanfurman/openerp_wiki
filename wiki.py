@@ -416,7 +416,11 @@ class wiki_doc(osv.Model):
 
     def _text2html(self, name, source_doc, context=None):
         try:
-            return Document(source_doc).to_html()
+            return (
+                    '<div class="wiki">\n'
+                    + Document(source_doc).to_html()
+                    + '\n</div>'
+                    )
         except Exception:
             _logger.exception('stonemark unable to convert document <%s>', name)
             return '<pre>' + escape(source_doc) + '</pre>'

@@ -1,0 +1,119 @@
+@charset "utf-8";
+/* adapted from Dom (dcode) at [https://dev.to/dcodeyt/creating-beautiful-html-tables-with-css-428l]
+ */
+.wiki table {
+    border-collapse: collapse;
+    margin: 10px 0;
+    /*
+    font-size: 0.9em;
+    font-family: sans-serif;
+    min-width: 400px;
+    */
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+}
+
+.wiki table th {
+  text-align: left !important;
+  min-width: 150px;
+  /*
+  max-width: 22%;
+  */
+}
+
+.wiki table th:first-child {
+  text-align: left !important;
+  /*
+  min-width: 50;
+  max-width: 12%;
+  */
+}
+
+.wiki table td {
+  padding: 7px 25px 7px 0px;
+  margin: 5px;
+  text-align: left;
+}
+
+.wiki tbody tr:nth-of-type(even) {
+    background-color: #f3f3f3;
+}
+
+.wiki tbody tr.active-row {
+    font-weight: bold;
+    color: #009879;
+}
+
+.wiki select {
+  max-width: 225px;
+}
+
+/*
+ * adapted from Chris Coyier [https://css-tricks.com/snippets/css/simple-and-nice-blockquote-styling/]
+ * --------------------------------------------------------------------------------------
+ */
+blockquote {
+  background: #f9f9f9;
+  border-left: 10px solid #ccc;
+  margin: 1.5em 10px;
+  padding: 0.5em 10px;
+  quotes: "\201C""\201D""\2018""\2019";
+}
+
+blockquote:before {
+  color: #ccc;
+  content: open-quote;
+  font-size: 4em;
+  line-height: 0.1em;
+  margin-right: 0.25em;
+  vertical-align: -0.4em;
+}
+
+blockquote p {
+  display: inline;
+}
+/*
+ * adapted from [https://css-tricks.com/styling-code-in-and-out-of-blocks/]
+ */
+
+/* For all <code> */
+code {
+  font-family: monospace;
+  font-size: inherit;
+  background: #efefff;
+}
+
+/* Code in text */
+p > code,
+li > code,
+dd > code,
+td > code {
+  word-wrap: break-word;
+  box-decoration-break: clone;
+  padding: .1rem .3rem .2rem;
+  border-radius: .75rem;
+}
+
+h1 > code,
+h2 > code,
+h3 > code,
+h4 > code,
+h5 > code {
+  padding: .1rem .3rem .2rem;
+  border-radius: .2rem;
+  background: inherit;
+  border: thin black;
+  border-radius: .5rem;
+}
+
+pre code {
+  display: block;
+  white-space: pre;
+  -webkit-overflow-scrolling: touch;
+  overflow-x: scroll;
+  max-width: 100%;
+  min-width: 100px;
+  padding: 10px;
+  border: thin black solid;
+  border-radius: .2rem;
+}
+
