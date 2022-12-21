@@ -27,10 +27,10 @@
                     ~div
                         ~h1
                             @name
-                        ~group
-                            @source_type .oe_edit_only widget='radio' options="{'horizontal': 1}"
-                            @wiki_key $Category .oe_edit_only on_change="onchange_wiki_key(wiki_key, source_doc)"
-                            @top_level .oe_edit_only
+                        ~group .oe_edit_only
+                            @source_type widget='radio' options="{'horizontal': 1}"
+                            @wiki_key $Category on_change="onchange_wiki_key(wiki_key, source_doc)"
+                            @top_level
                         ~div attrs="{'invisible': [('source_type','!=','txt')]}"
                             @source_doc .oe_edit_only placeholder="wiki document..."
                             @wiki_doc .oe_view_only
