@@ -31,9 +31,9 @@ class Wiki(Controller):
         session._password = password
         img_id = int(img_id)
         Model = request.session.model(model)
-        page = Model.read([img_id], ['name', 'source_img'], request.context)[0] 
+        page = Model.read([img_id], ['name', 'wiki_img'], request.context)[0] 
         image_name = page['name']
-        image = b64decode(page['source_img'])
+        image = b64decode(page['wiki_img'])
         try:
             return request.make_response(
                     image,
