@@ -244,7 +244,7 @@ class wiki_doc(osv.Model):
                 ),
         'source_doc': fields.text('Source Document', ),
         'source_img': fields.binary('Source Image', ),
-        'wiki_doc': fields.html('Wiki Document'),
+        'wiki_doc': fields.raw_html('Wiki Document'),
         'wiki_img': fields.binary(string="Wiki-sized image"),
         'forward_links': fields.many2many(
             'wiki.page',
