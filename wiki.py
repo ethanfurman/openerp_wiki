@@ -326,7 +326,7 @@ class wiki_doc(osv.Model):
             [id] = id
         def repl(mo):
             href, target, close = mo.groups()
-            if target.startswith('http'):
+            if target.startswith(('http','#footnote-')):
                 return href + target + close
             key = self.name_key(target)
             return "%s%s.html%s" % (href, key, close)
