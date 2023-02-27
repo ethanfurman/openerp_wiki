@@ -228,7 +228,13 @@ class wiki_doc(osv.Model):
 
     def _select_key(self, cr, uid, context=None):
         key = self.pool.get('wiki.key')
-        ids = key.search(cr, uid, [('private','=',False)], context=context)
+        if 'wiki_key' in self._defaults:
+            # private wiki
+            domain = [('name','=',self._defaults['wiki_key'])]
+        else:
+            # public wiki
+            domain = [('private','=',False)]
+        ids = key.search(cr, uid, domain, context=context)
         res = key.read(cr, uid, ids, ['name', 'id'], context=context)
         res = [(r['name'], r['name']) for r in res]
         return res
