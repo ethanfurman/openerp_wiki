@@ -90,7 +90,6 @@ example `_view.xaml` file
 
 from antipathy import Path
 from base64 import b64decode, b64encode
-import codecs
 import io
 import logging
 import openerp
@@ -102,7 +101,7 @@ import os
 from PIL import Image, ImageOps
 import re
 from textwrap import dedent
-from stonemark import Document, escape
+from stonemark import Document, escape, write_css, write_html as write_html_file
 import threading
 from VSS.utils import translator
 
@@ -340,12 +339,14 @@ class wiki_doc(osv.Model):
         name = rec.name
         title = '%s\n%s\n%s\n\n' % (len(name)*'=', name, len(name)*'=')
         source_doc = title + (rec.source_doc or '')
-        document = self._text2html(name, source_doc)
+        document = Document(source_doc, first_header_is_title=True).to_html()
         link = re.compile('(<a href=")([^"]*)(">)')
         document = re.sub(link, repl, document)
         file = self._wiki_path/name_key(rec.wiki_key)/rec.name_key + '.html'
-        with codecs.open(file, 'w', encoding='utf8') as fh:
-            fh.write(document)
+        write_html_file(file, document)
+        css_file = self._wiki_path/name_key(rec.wiki_key)/'stonemark.css'
+        if not css_file.exists():
+            write_css(self._wiki_path/name_key(rec.wiki_key)/'stonemark.css')
 
     def _write_image_file(self, cr, uid, id, context=None):
         if not isinstance(id, (int, long)):
