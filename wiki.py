@@ -343,7 +343,7 @@ class wiki_doc(osv.Model):
         link = re.compile('(<a href=")([^"]*)(">)')
         document = re.sub(link, repl, document)
         file = self._wiki_path/name_key(rec.wiki_key)/rec.name_key + '.html'
-        write_html_file(file, document)
+        write_html_file(file, document, title)
         css_file = self._wiki_path/name_key(rec.wiki_key)/'stonemark.css'
         if not css_file.exists():
             write_css(self._wiki_path/name_key(rec.wiki_key)/'stonemark.css')
