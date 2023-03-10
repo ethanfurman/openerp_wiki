@@ -6,6 +6,7 @@
  *  - [https://css-tricks.com/styling-code-in-and-out-of-blocks/]
  */
 .wiki table {
+    border: 1px solid #dfdfff;
     border-collapse: collapse;
     margin: 10px 0;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
@@ -23,9 +24,18 @@
 }
 
 .wiki table td {
-  padding: 7px 25px 7px 0px;
+  border: 1px solid #dfdfff;
+  padding: 7px 25px 7px 5px;
   margin: 5px;
   text-align: left;
+}
+
+.wiki .merged_cols {
+  text-align: center;
+}
+
+.wiki .merged_rows {
+  vertical-align: middle;
 }
 
 .wiki tbody tr:nth-of-type(even) {
@@ -35,6 +45,10 @@
 .wiki tbody tr.active-row {
     font-weight: bold;
     color: #009879;
+}
+
+.wiki table tfoot tr:first-child {
+  border-top: thin black solid;
 }
 
 .wiki select {
@@ -66,7 +80,7 @@
 .wiki code {
   font-family: monospace;
   font-size: inherit;
-  background: #efefff;
+  background: #dfdfff;
 }
 
 /* Code in text */
