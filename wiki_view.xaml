@@ -96,12 +96,21 @@
                     ~label for='template'
                     @template
 
+        ~record model=view #view_main_wiki_key_search
+            @name: wiki.key.search
+            @model: wiki.key
+            @arch type='xml'
+                ~search $Wiki_Category
+                    ~filter $Standard_Categories @type_standard domain="[('private','=',False)]"
+                    ~filter $System_Categories @type_private domain="[('private','=',True)]"
+
         ~record model=action #action_main_wiki_key
             @name: Wiki Category
             @res_model: wiki.key
             @view_type: form
             @view_id ref='view_main_wiki_key_tree'
             @view_mode: tree,form
+            @context: {'search_default_type_standard': '1'}
 
         ~menuitem @Categories #menu_main_wiki_keys parent='menu_main_wiki' action='action_main_wiki_key' sequence='20'
 
