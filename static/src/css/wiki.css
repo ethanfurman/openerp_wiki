@@ -12,47 +12,42 @@
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
 }
 
-.wiki table th {
-  text-align: left !important;
-  min-width: 150px;
-  background-color: #f3f3f3;
-  border-bottom: thin black solid;
-}
-
-.wiki table th:first-child {
-  text-align: left !important;
-}
-
-.wiki table td {
-  border: 1px solid #dfdfff;
-  padding: 7px 25px 7px 5px;
-  margin: 5px;
-  text-align: left;
-}
-
-.wiki .merged_cols {
+.wiki table .merged_cols {
   text-align: center;
 }
 
-.wiki .merged_rows {
+.wiki table .merged_rows {
   vertical-align: middle;
 }
 
-.wiki tbody tr:nth-of-type(even) {
-    background-color: #f3f3f3;
+.wiki table th {
+  text-align: left !important;
+  min-width: 100px;
+  background-color: #f9f9f9;
+  border: none;
 }
 
-.wiki tbody tr.active-row {
-    font-weight: bold;
-    color: #009879;
+.wiki table td {
+  border-top: 1px solid #dfdfff;
+  border-right: 1px solid #dfdfff;
+  padding: 7px 25px 7px 5px;
+  margin: 5px;
+  text-align: left;
+  background-color: #f3f3f3;
 }
 
-.wiki table tfoot tr:first-child {
-  border-top: thin black solid;
+.wiki table tbody tr:first-child td {
+  border-top: 1px solid black;
 }
 
-.wiki select {
-  max-width: 225px;
+.wiki table tfoot tr:first-child td {
+  border-top: 1px solid black;
+}
+
+.wiki table tfoot td {
+  border: none;
+  background-color: #f3f3f3;
+  font-weight: bold;
 }
 
 .wiki blockquote {
