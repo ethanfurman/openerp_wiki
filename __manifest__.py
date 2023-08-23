@@ -12,7 +12,7 @@
             "knowledge",
             ],
     'data': [
-            'wiki_view.xaml',
+            'views/wiki.xml',
             'security/ir.model.access.csv',
             ],
     'css':[
@@ -21,6 +21,7 @@
     'js': [
             ],
     'test': [],
+    'application': True,
     'installable': True,
     'active': False,
 }
