@@ -86,7 +86,7 @@
   word-wrap: break-word;
   box-decoration-break: clone;
   padding: .1rem .3rem .2rem;
-  border-radius: .75rem;
+  border-radius: .25rem;
 }
 
 .wiki h1 > code,
@@ -99,6 +99,13 @@
   background: inherit;
   border: thin black solid;
 }
+
+.wiki .pre {
+    font-family: monospace;
+    font-size: inherit;
+    white-space: pre;
+    background-color: #eeeeee;
+    }
 
 .wiki pre {
   display: inline;
