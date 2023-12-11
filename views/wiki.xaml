@@ -7,7 +7,9 @@
 ~openerp
     ~data
 
-        ~menuitem @Wiki #menu_main_wiki parent='knowledge.menu_document' sequence='10'
+        ~menuitem @Wiki #menu_wiki sequence='999'
+        ~menuitem @Wiki #menu_main_wiki parent='menu_wiki' sequence='10'
+        // ~menuitem @Wiki #menu_main_wiki parent='mail.menu_root_discuss' sequence='10'
 
         // pages & images
 
@@ -23,13 +25,15 @@
             @name: wiki.page.form
             @model: wiki.page
             @arch type='xml'
-                ~form $Wiki_Page version='7.0'
+                ~form $Wiki_Page
                     ~div
                         ~h1
                             @name
                         ~group .oe_edit_only
-                            @source_type widget='radio' options="{'horizontal': 1}"
-                            @wiki_key $Category on_change="onchange_wiki_key(wiki_key, source_doc)"
+                            ~group
+                                @wiki_key $Category
+                            ~group
+                                @source_type
                             @top_level
                         ~div attrs="{'invisible': [('source_type','!=','txt')]}"
                             @source_doc .oe_edit_only placeholder="wiki document..."
@@ -39,7 +43,7 @@
                             @wiki_img widget='image' .oe_view_only
                         ~div
                             ~hr
-                            @reverse_links .oe_view_only widget='many2many_tags'
+                            @reverse_links_html .oe_view_only
 
         ~record model=view #view_main_wiki_search
             @name: wiki.page.search
@@ -49,12 +53,11 @@
                     ~filter $Top_Level_Pages @type_top_level domain="[('top_level','=',True)]"
                     ~filter $Not_Empty @type_not_empty domain="[('is_empty','=',False)]"
                     ~group $Group_By expand='0'
-                        ~filter $Category domain='[]' context="{'group_by': 'wiki_key'}"
+                        ~filter $Category @type_category domain='[]' context="{'group_by': 'wiki_key'}"
 
         ~record model=action #action_main_wiki_pages
             @name: Wiki
             @res_model: wiki.page
-            @view_type: form
             @view_id ref='view_main_wiki_tree'
             @search_view_id ref='view_main_wiki_search'
             @view_mode: tree,form
@@ -66,7 +69,6 @@
         ~record model=action #action_main_wiki_images
             @name: Wiki Images
             @res_model: wiki.page
-            @view_type: form
             @view_id ref='view_main_wiki_tree'
             @search_view_id ref='view_main_wiki_search'
             @view_mode: tree,form
@@ -87,7 +89,7 @@
             @name: wiki.key.form
             @model: wiki.key
             @arch type='xml'
-                ~form $Wiki_Category version='7.0'
+                ~form $Wiki_Category
                     ~group
                         ~group
                             @name
@@ -107,7 +109,6 @@
         ~record model=action #action_main_wiki_key
             @name: Wiki Category
             @res_model: wiki.key
-            @view_type: form
             @view_id ref='view_main_wiki_key_tree'
             @view_mode: tree,form
             @context: {'search_default_type_standard': '1'}
@@ -119,7 +120,6 @@
         ~record model=action #action_main_wiki_empty
             @name: Wiki Empty Pages
             @res_model: wiki.page
-            @view_type: form
             @view_id ref='view_main_wiki_tree'
             @view_mode: tree,form
             @domain: [('is_empty','=',True)]

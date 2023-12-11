@@ -9,10 +9,9 @@
     'website': '',
     'depends': [
             "base",
-            "knowledge",
             ],
     'data': [
-            'views/wiki.xml',
+            'views/wiki.xaml',
             'security/ir.model.access.csv',
             ],
     'css':[

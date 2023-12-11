@@ -1,4 +1,4 @@
-from . import wiki
+from . import models
 from . import controllers
 
 __all__ = [

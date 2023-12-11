@@ -18,9 +18,8 @@ example `.py` file
         _inherit = 'wiki.page'
         _description = 'Some Wiki Page'
 
-        _defaults = {
-                'wiki_key': 'some-wiki',
-                }
+        _wiki_key = 'some-wiki'
+
 
 example `_view.xaml` file
 -------------------------
@@ -92,11 +91,6 @@ from antipathy import Path
 from base64 import b64decode, b64encode
 import io
 import logging
-import openerp
-from openerp import VAR_DIR, SUPERUSER_ID
-from openerp.exceptions import ERPError
-from openerp.osv import osv, fields
-from openerp.tools import self_ids
 import os
 from PIL import Image, ImageOps
 import re
@@ -104,6 +98,12 @@ from textwrap import dedent
 from stonemark import Document, escape, write_css, write_html as write_html_file
 import threading
 from VSS.utils import translator
+
+
+
+import odoo
+from odoo import api, fields, models, tools, VAR_DIR, SUPERUSER_ID
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ _name_key = translator(
     keep='abcdefghijklmnopqrstuvwxyz_0123456789.-',
     )
 
-def name_key(name):
+def calc_name_key(name):
     name = name.replace('&','and')
     name = re.sub(r' ?- ?', '-', name.lower().strip())
     name = re.sub(r' +', ' ', name)
@@ -123,85 +123,82 @@ def name_key(name):
 
 WIKI_PATH = Path(VAR_DIR) / 'wiki'
 
-def unique(model, cr, uid, ids, context=None):
-    seen = set()
-    for rec in model.read(cr, uid, ids, context=context):
-        tname = name_key(rec['name'])
-        if tname in seen:
-            return False
-        seen.add(tname)
-    return True
-
-class wiki_key(osv.Model):
+class WikiKey(models.Model):
     "wiki categories (i.e. keys)"
     _name = 'wiki.key'
     _inherit = []
     _description = 'wiki key'
     _order = 'name'
 
-    _columns = {
-        'name': fields.char('Wiki Key', size=64, required=True),
-        'private': fields.boolean('System', help='Omit from Knowledge -> Wiki -> Pages ?', readonly=True),
-        'template': fields.text('Template'),
-        }
+    name = fields.Char('Wiki Key', required=True, size=64)
+    private = fields.Boolean('System', help='Omit from Wiki -> Pages ?', readonly=True)
+    template = fields.Text('Template')
 
-    _constraints = [
-        (unique, 'wiki name already in use', ['name']),
-        ]
+    @api.constrains('name')
+    def unique(self):
+        seen = set()
+        for rec in self.browse():
+            tname = calc_name_key(rec.name)
+            if tname in seen:
+                raise ValidationError('wiki name already in use: %r' % rec.name)
+            seen.add(tname)
 
-    def _auto_init(self, cr, context=None, subwiki=None):
+    def init(self):
         """
         ensure each non-system key exists on disk
         """
-        res = super(wiki_key, self)._auto_init(cr, context)
-        for rec in self.read(cr, SUPERUSER_ID, [('private','=',False)], context=context):
-            wiki_path = wiki_doc._wiki_path / name_key(rec['name'])
+        for rec in self.read():
+            wiki_path = WikiDoc._wiki_path / calc_name_key(rec.name)
             if not wiki_path.exists():
                 wiki_path.makedirs()
-        return res
 
-    def create(self, cr, uid, values, context=None):
-        new_id = super(wiki_key, self).create(cr, uid, values, context=context)
-        wiki_path = wiki_doc._wiki_path / name_key(values['name'])
-        if not wiki_path.exists():
-            wiki_path.makedirs()
-        return new_id
+    @api.model_create_multi
+    def create(self, vals_list):
+        categories = super().create(vals_list)
+        for cat in categories:
+            wiki_path = WikiDoc._wiki_path / calc_name_key(cat.name)
+            if not wiki_path.exists():
+                wiki_path.makedirs()
+        return categories
 
-    def write(self, cr, uid, ids, values, context=None):
-        if isinstance(ids, (int, long)):
-            ids = [ids]
+    def write(self, values):
+        if len(self) > 1:
+            raise ValidationError('attempt to change multiple record to same name: %r' % values['name'])
         if 'name' in values:
-            current = self.read(cr, uid, ids, values, context=context)
-            current_name = current[0]['name']
-        res = super(wiki_key, self).write(cr, uid, ids, values, context=context)
+            current_name = self[0]['name']
+        res = super().write(values)
         if 'name' in values:
             # update any pages in this categary
-            ctx = context or {}
-            ctx['wiki-maintenance'] = True
-            wiki_page = self.pool.get('wiki.page')
-            affected_ids = wiki_page.search(cr, uid, [('wiki_key','=',current_name)], context=context)
-            wiki_page.write(cr, uid, affected_ids, {'wiki_key': values['name']}, context=ctx)
+            self = self.with_context(wiki_maintenance=True)
+            wiki_pages = self.env['wiki.page']
+            wiki_pages = wiki_page.search([('wiki_key','=',current_name)])
+            wiki_pages.write({'wiki_key': values['name']})
             # and rename the on-disk directory
-            old_path = wiki_doc._wiki_path / name_key(current_name)
-            new_path = wiki_doc._wiki_path / name_key(values['name'])
-            old_path.move(new_path)
+            old_path = WikiDoc._wiki_path / calc_name_key(current_name)
+            new_path = WikiDoc._wiki_path / calc_name_key(values['name'])
+            if old_path != new_path:
+                # not just an aesthetic change
+                old_path.move(new_path)
         return res
 
-    def unlink(self, cr, uid, ids, context=None):
-        if isinstance(ids, (int, long)):
-            ids = [ids]
-        wiki_page = self.pool.get('wiki.page')
-        names = [r['name'] for r in self.read(cr, uid, ids, context=context)]
-        if wiki_page.search(cr, uid, [('wiki_key','in',names)], context=context):
-            raise ERPError('Wiki Error', 'Cannot delete categories that are in use.')
-        res = super(wiki_key, self).unlink(cr, uid, ids, context=context)
+    def unlink(self):
+        wiki_page = self.env['wiki.page']
+        names = [r.name for r in self]
+        in_use = [r.wiki_key for r in wiki_page.search([('wiki_key','in',names)])]
+        if in_use:
+            raise ValidationError('Cannot delete categories that are in use: %s' % ', '.join(in_use))
+        res = super().unlink()
         for name in names:
-            wiki_path = wiki_doc._wiki_path / name_key(name)
-            wiki_path.rmdir()
+            wiki_path = WikiDoc._wiki_path / calc_name_key(name)
+            wiki_path.rmtree(onerror=self._log_disc_error)
         return res
 
+    @api.model
+    def _log_disc_error(self, func, path, exc_info):
+        _logger.error('unable to %s() %r [%s]', func.__name__, path, exc_info[1])
 
-class wiki_doc(osv.Model):
+
+class WikiDoc(models.Model):
     "wiki documents"
     _name = 'wiki.page'
     _inherit = []
@@ -210,179 +207,188 @@ class wiki_doc(osv.Model):
 
     _wiki_path = WIKI_PATH
     _wiki_tables = set()
+    _wiki_key = ''
 
-    def _calc_is_empty(self, cr, uid, ids, field_name, arg, context=None):
-        res = {}.fromkeys(ids, False)
-        for rec in self.read(cr, uid, ids, ['source_doc','source_img','source_type'], context=context):
-            type = rec['source_type']
-            doc = rec['source_doc']
-            img = rec['source_img']
-            if type == 'txt' and doc in (False, '', '[under construction]', '[[under construction]]'):
-                res[rec['id']] = True
-            elif type == 'img' and img in (False, placeholder):
-                res[rec['id']] = True
+    @api.depends('source_doc','source_type','source_img')
+    def _finalize_page(self):
+        # set wiki_doc, wiki_img, and is_empty
+        for rec in self:
+            if isinstance(rec.id, models.NewId):
+                continue
+            # update wiki_doc
+            rec.wiki_doc = rec.source_doc
+            rec.forward_links = [(5, False)]
+            if rec.source_doc:
+                document = self._text2html(rec.name, rec.source_doc)
+                rec.wiki_doc, forward_links = self._convert_links(rec.id, document, category=rec.wiki_key)
+                if forward_links:
+                    rec.forward_links = [(6, 0, list(set(forward_links)))]
+            # update wiki_img
+            rec.wiki_img = rec.source_img
+            if rec.source_img:
+                file_type = os.path.splitext(rec.name)[1][1:]  # strip leading period
+                image_stream = io.BytesIO(b64decode(rec.source_img))
+                image = Image.open(image_stream)
+                target_width = 900
+                if target_width < image.size[0]:
+                    target_height = int(image.size[1] * (float(target_width) / image.size[0]))
+                    size = target_width, target_height
+                    image = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
+                    if image.mode not in ["1", "L", "P", "RGB", "RGBA"]:
+                        image = image.convert("RGB")
+                    new_image_stream = io.BytesIO()
+                    image.save(new_image_stream, file_type)
+                    rec.wiki_img = b64encode(new_image_stream.getvalue())
+            if rec.source_type == 'txt' and rec.source_doc in (False, '', '[under construction]', '[[under construction]]'):
+                rec.is_empty = True
+            elif rec.source_type == 'img' and rec.source_img in (False, placeholder):
+                rec.is_empty = True
             else:
-                res[rec['id']] = False
-        return res
+                rec.is_empty = False
 
-    def _select_key(self, cr, uid, context=None):
-        key = self.pool.get('wiki.key')
-        if 'wiki_key' in self._defaults:
+    def _create_reverse_html(self):
+        action, menu = self._get_action_menu()
+        for rec in self:
+            if isinstance(rec.id, models.NewId):
+                continue
+            result = []
+            for link in rec.reverse_links:
+                result.append('<div><a href="#id=%d&action=%d&model=%s&view_type=form&cids=&menu_id=%d">%s</a></div>' % (
+                    link.id, action.id, self._name, menu.id, link.name,
+                    ))
+            rec.reverse_links_html = ''.join(result)
+
+    @api.model
+    def _select_key(self):
+        key = self.env['wiki.key']
+        if self._wiki_key:
             # private wiki
-            domain = [('name','=',self._defaults['wiki_key'])]
+            domain = [('name','=',self._wiki_key)]
         else:
             # public wiki
             domain = [('private','=',False)]
-        ids = key.search(cr, uid, domain, context=context)
-        res = key.read(cr, uid, ids, ['name', 'id'], context=context)
-        res = [(r['name'], r['name']) for r in res]
+        res = [(calc_name_key(r['name']), r['name']) for r in key.search(domain)]
         return res
 
-    _columns = {
-        'wiki_key': fields.selection(_select_key, required=True, string='Wiki Key', help="each logical wiki has its own wiki key"),
-        'name': fields.char('Name', size=64, required=True),
-        'name_key': fields.char('Name Key', size=64, required=True),
-        'top_level': fields.boolean('Top level doc', help="Top level docs are shown by default."),
-        'source_type': fields.selection(
-                (('txt', 'Text'), ('img', 'Image')),
-                'Source Type',
-                ),
-        'source_doc': fields.text('Source Document', ),
-        'source_img': fields.binary('Source Image', ),
-        'wiki_doc': fields.raw_html('Wiki Document'),
-        'wiki_img': fields.binary(string="Wiki-sized image"),
-        'forward_links': fields.many2many(
+    wiki_key = fields.Selection(_select_key, required=True, string='Wiki Key', help="each logical wiki has its own wiki key")
+    name = fields.Char('Name', size=64, required=True)
+    name_key = fields.Char('Name key', size=64, required=True)
+    top_level = fields.Boolean('Top level doc', default=False, help='Top level docs are shown by default.')
+    source_type = fields.Selection([('txt','Text'),('img','Image')], 'Source Type', default='txt')
+    source_doc = fields.Text('Source Document')
+    source_img = fields.Image('Source Image', attachment=False)
+    wiki_doc = fields.RawHtml('Wiki Document', compute='_finalize_page', store=True)
+    wiki_img = fields.Image('Wiki Image', compute='_finalize_page', store=True)
+    forward_links = fields.Many2many(
             'wiki.page',
-            rel='wiki_links', id1='src', id2='tgt',
+            'wiki_links_rel', 'src', 'tgt',
             string='Links from page',
-            ),
-        'reverse_links': fields.many2many(
+            )
+    reverse_links = fields.Many2many(
             'wiki.page',
-            rel='wiki_links', id1='tgt', id2='src',
+            'wiki_links_rel', 'tgt', 'src',
             string='Links to page',
-            ),
-        'is_empty': fields.function(
-            _calc_is_empty,
-            string='Empty?',
-            type='boolean',
-            store={
-                'wiki.page': (self_ids, ['source_doc','source_type','source_img'], 10),
-                },
-            ),
-        }
-
-    _defaults = {
-        'source_type': 'txt',
-        'top_level': False,
-        }
+            )
+    reverse_links_html = fields.RawHtml('Reverse Links', compute='_create_reverse_html')
+    is_empty = fields.Boolean('Empty?', compute='_finalize_page', store=True)
 
     _sql_constraints = [
         ('name_uniq', 'unique(name_key)', 'name (or close match) already in use'),
         ]
 
     def __init__(self, pool, cr):
-        super(wiki_doc, self).__init__(pool, cr)
-        if self.__class__.__name__ != 'wiki_doc':
+        super().__init__(pool, cr)
+        if self.__class__.__name__ != 'WikiDoc':
             # record table
             self.__class__._wiki_tables.add(self._name)
 
-    def _auto_init(self, cr, context=None):
-        res = super(wiki_doc, self)._auto_init(cr, context)
-        if self.__class__.__name__ == 'wiki_doc':
+    def init(self):
+        if self.__class__.__name__ == 'WikiDoc':
             subwikis = [
-                    (rec['name'], name_key(rec['name']))
-                    for rec in self.pool.get('wiki.key').read(cr, SUPERUSER_ID, [('private','=',False)], context=context)
+                    (rec.name, self.calc_name_key(rec.name))
+                    for rec in self.env['wiki.key'].search([('private','=',False)])
                     ]
         else:
-            subwikis = [(self._defaults['wiki_key'], name_key(self._defaults['wiki_key']))]
-        # get our own cursor in case something fails
-        db_name = threading.current_thread().dbname
-        db = openerp.sql_db.db_connect(db_name)
-        wiki_cr = db.cursor()
-        try:
-            for name, path in subwikis:
-                wiki_path = self._wiki_path / path
-                # if not wiki_path.exists():
-                _logger.info('wiki: writing files for %r to %r', name, wiki_path)
-                wiki_path.makedirs()
-                for rec in self.browse(wiki_cr, SUPERUSER_ID, [('wiki_key','=',name)], context=context):
-                    wiki_cr.execute(dedent('''
-                            UPDATE %s
-                            SET name=%%s, name_key=%%s
-                            WHERE id=%%s
-                            ''' % (self._table, )), (rec.name.strip(), name_key(rec.name.strip()), rec.id)
-                            )
-                    try:
-                        if rec.source_type == 'txt':
-                            self.write(wiki_cr, SUPERUSER_ID, rec.id, {'source_doc': rec.source_doc}, context=context)
-                        elif rec.source_type == 'img':
-                            self.write(wiki_cr, SUPERUSER_ID, rec.id, {'source_img': rec.source_img}, context=context)
-                        else:
-                            _logger.error('rec id %d is missing `source_type`', rec.id)
-                    except Exception:
-                        _logger.exception('error processing %r' % rec.name)
-            wiki_cr.commit()
-        finally:
-            wiki_cr.close()
-        return res
+            subwikis = [(self._wiki_key, self.calc_name_key(self._wiki_key))]
+        wiki_cr = self._cr
+        for name, path in subwikis:
+            wiki_path = self._wiki_path / path
+            # if not wiki_path.exists():
+            _logger.info('wiki: writing files for %r to %r', name, wiki_path)
+            wiki_path.makedirs()
+            for rec in self.search([('wiki_key','=',name)]):
+                wiki_cr.execute(dedent('''
+                        UPDATE %s
+                        SET name=%%s, name_key=%%s
+                        WHERE id=%%s
+                        ''' % (self._table, )), (rec.name.strip(), self.calc_name_key(rec.name.strip()), rec.id)
+                        )
+                try:
+                    if rec.source_type == 'txt':
+                        rec.write({'source_doc': rec.source_doc})
+                    elif rec.source_type == 'img':
+                        rec.write({'source_img': rec.source_img})
+                    else:
+                        _logger.error('rec id %d is missing `source_type`', rec.id)
+                except Exception:
+                    _logger.exception('error processing %r' % rec.name)
 
-    def _write_html_file(self, cr, uid, id, context=None):
-        if not isinstance(id, (int, long)):
-            [id] = id
+    @api.model
+    def _write_html_file(self, rec):
         def repl(mo):
             href, target, close = mo.groups()
             if target.startswith(('http','#footnote-')):
                 return href + target + close
-            key = self.name_key(target)
+            key = self.calc_name_key(target)
             return "%s%s.html%s" % (href, key, close)
-        rec = self.browse(cr, uid, id, context=context)
         name = rec.name
         title = '%s\n%s\n%s\n\n' % (len(name)*'=', name, len(name)*'=')
         source_doc = title + (rec.source_doc or '')
         document = Document(source_doc, first_header_is_title=True).to_html()
         link = re.compile('(<a href=")([^"]*)(">)')
         document = re.sub(link, repl, document)
-        file = self._wiki_path/name_key(rec.wiki_key)/rec.name_key + '.html'
+        file = self._wiki_path/self.calc_name_key(rec.wiki_key)/rec.name_key + '.html'
         write_html_file(file, document, title)
-        css_file = self._wiki_path/name_key(rec.wiki_key)/'stonemark.css'
+        css_file = self._wiki_path/self.calc_name_key(rec.wiki_key)/'stonemark.css'
         if not css_file.exists():
-            write_css(self._wiki_path/name_key(rec.wiki_key)/'stonemark.css')
+            write_css(self._wiki_path/self.calc_name_key(rec.wiki_key)/'stonemark.css')
 
-    def _write_image_file(self, cr, uid, id, context=None):
-        if not isinstance(id, (int, long)):
-            [id] = id
-        rec = self.browse(cr, uid, id, context=context)
-        file = self._wiki_path/name_key(rec.wiki_key)/rec.name_key
-        with open(file, 'w') as fh:
+    @api.model
+    def _write_image_file(self, rec):
+        file = self._wiki_path/self.calc_name_key(rec.wiki_key)/rec.name_key
+        with open(file, 'wb') as fh:
             fh.write(b64decode(rec.source_img))
 
-    def _convert_links(self, cr, uid, id, document, category, context=None):
-        if not isinstance(id, (int, long)):
-            [id] = id
-        context = (context or {}).copy()
-        context['wiki_reverse_link'] = id
+    @api.model
+    def _convert_links(self, rec_id, document, category):
+        self = self.with_context(wiki_reverse_link=rec_id)
         forward_links = []
+        action, menu = self._get_action_menu()
+        while menu.parent_id:
+            menu = menu.parent_id
+        #
         def repl_image_link(mo):
             src, target, attrs, close = mo.groups()
             if target.startswith('http'):
                 return src + target + attrs + close
-            key = self.name_key(target)
-            target_ids = self.search(cr, uid, [('name_key','=',key)], context=context)
+            key = self.calc_name_key(target)
+            target_ids = self.search([('name_key','=',key)])
             if not target_ids:
                 # create empty image
                 target_ids = [self.create(
-                        cr, uid,
                         values={
                             'name': target,
                             'source_type': 'img',
                             'source_img': placeholder,
                             'wiki_key': category,
                             },
-                        context=context,
                         )]
-            forward_links.extend(target_ids)
-            return '<a href="#id=%d">%s/wiki/image?model=%s&img_id=%d%s%s</a>' % (
+            forward_links.extend([t.id for t in target_ids])
+            return '<a href="#id=%d&action=%d&model=%s&view_type=form&cids=&menu_id=%d">%s/wiki/image/%s/%d%s%s</a>' % (
                     target_ids[0],
+                    action.id,
+                    self._name,
+                    menu.id,
                     src,
                     self._name,
                     target_ids[0],
@@ -396,30 +402,38 @@ class wiki_doc(osv.Model):
                     '#footnote-',   # footnote link
                 )):
                 return href + target + close
-            key = self.name_key(target)
-            target_ids = self.search(cr, uid, [('name_key','=',key)], context=context)
+            key = self.calc_name_key(target)
+            target_ids = self.search([('name_key','=',key)])
             if not target_ids:
                 # create empty page
                 target_ids = [self.create(
-                        cr, uid,
                         values={
                             'name': target,
                             'source_doc': '[[under construction]]',
                             'wiki_key': category,
                             },
-                        context=context,
                         )]
-            forward_links.extend(target_ids)
-            return "%s#id=%d%s" % (href, target_ids[0], close)
+            forward_links.extend([t.id for t in target_ids])
+            return "%s#id=%d&action=%d&model=%s&view_type=form&cids=&menu_id=%d%s" % (
+                    href, target_ids[0], action.id, self._name, menu.id, close,
+                    )
+        #
         web_link = re.compile('(<a href=")([^"]*)(">)')
         img_link = re.compile('(<img src=")([^"]*)(")([^>]*>)')
         document = re.sub(web_link, repl_page_link, document)
         document = re.sub(img_link, repl_image_link, document)
         return document, forward_links
 
-    name_key = staticmethod(name_key)
+    calc_name_key = api.model(staticmethod(calc_name_key))
 
-    def _text2html(self, name, source_doc, context=None):
+    @api.model
+    def _get_action_menu(self):
+        action = self.env['ir.actions.act_window'].search([('res_model','=',self._name)])[0]
+        menu = self.env['ir.ui.menu'].search([('action','=','ir.actions.act_window,%d' % action.id)])[0]
+        return action, menu
+
+    @api.model
+    def _text2html(self, name, source_doc):
         try:
             return (
                     '<div class="wiki">\n'
@@ -437,41 +451,41 @@ class wiki_doc(osv.Model):
     # read: normal
     #-----------------------------------------------------------------------------------
 
-    def create(self, cr, uid, values, context=None):
-        # convert source_doc to wiki_doc
-        # collect page_name links in wiki doc
-        # ensure records exist for each page_name
-        # replace page_name links in wiki_doc with ids of linked records
-        if context is None:
-            context = {}
-        name = values['name'] = values['name'].strip()
-        values['name_key'] = name_key(name)
-        new_id = super(wiki_doc, self).create(cr, uid, values, context=context)
-        del values['name']
-        del values['name_key']
-        self.write(cr, uid, [new_id], values, context=context)
-        return new_id
+    def write_files(self):
+        for rec in self:
+            if rec.source_type == 'img':
+                self._write_image_file(rec)
+            else: # 'txt'
+                self._write_html_file(rec)
 
-    def write(self, cr, uid, ids, values, context=None):
+    @api.model_create_multi
+    def create(self, values):
+        for rec in values:
+            name = rec['name'] = rec['name'].strip()
+            rec['name_key'] = self.calc_name_key(name)
+        new_rec = super().create(values)
+        self.write_files()
+        return new_rec
+
+    def write(self, values):
+        # ?? self is old data, values are new data ??
+        #
         # TODO: handle changes to wiki_key
-        context = context or {}
-        if isinstance(ids, (int, long)):
-            ids = [ids]
-        if context.get('wiki-maintenance'):
-            return super(wiki_doc, self).write(cr, uid, ids, values, context=context)
-        for rec in self.browse(cr, uid, ids, context=context):
+        if self.env.context.get('wiki_maintenance'):
+            return super().write(values)
+        for rec in self:
             old_file = None
             if 'name' in values:
                 # save old name so old file can be deleted
-                old_file = self._wiki_path / name_key(rec.wiki_key) / rec.name_key
+                old_file = self._wiki_path / self.calc_name_key(rec.wiki_key) / rec.name_key
                 if rec.source_type == 'txt':
                     old_file += '.html'
                 name = values['name'] = values['name'].strip()
-                new_name_key = self.name_key(name)
+                new_name_key = self.calc_name_key(name)
                 if rec.name_key != new_name_key and rec.reverse_links:
                     # do not allow name changes as it would require automatically updating the
                     # linking documents' text with the new name
-                    raise ERPError('invalid name change', 'document is linked to, and change would modify name key')
+                    raise ValidationError('document is linked to, and change would modify name key')
                 values['name_key'] = new_name_key
             if 'source_type' in values:
                 st = values['source_type']
@@ -482,68 +496,29 @@ class wiki_doc(osv.Model):
                     values['source_doc'] = False
                     values['wiki_doc'] = False
                     values['forward_links'] = [(5, False)]
-            wiki_key = values.get('wiki_key', rec.wiki_key)
-            source_doc = values.get('source_doc')
-            source_img = values.get('source_img')
-            if source_doc:
-                name = values.get('name', rec.name)
-                document = self._text2html(name, source_doc)
-                document, forward_links = self._convert_links(
-                        cr, uid, rec.id,
-                        document,
-                        category=wiki_key,
-                        context=context,
-                        )
-                values['wiki_doc'] = document
-                if forward_links:
-                    values['forward_links'] = [(6, 0, list(set(forward_links)))]
-                else:
-                    values['forward_links'] = [(5, False)]
-            if source_img:
-                name = values.get('name', rec.name)
-                values['wiki_img'] = values['source_img']
-                file_type = os.path.splitext(name)[1][1:]  # strip leading period
-                image_stream = io.BytesIO(b64decode(values['source_img']))
-                image = Image.open(image_stream)
-                target_width = 900
-                if target_width < image.size[0]:
-                    target_height = int(image.size[1] * (float(target_width) / image.size[0]))
-                    size = target_width, target_height
-                    image = ImageOps.fit(image, size, Image.ANTIALIAS)
-                    if image.mode not in ["1", "L", "P", "RGB", "RGBA"]:
-                        image = image.convert("RGB")
-                    new_image_stream = io.BytesIO()
-                    image.save(new_image_stream, file_type)
-                    values['wiki_img'] = b64encode(new_image_stream.getvalue())
-            if not super(wiki_doc, self).write(cr, uid, ids, values, context=context):
+            if not super().write(values):
                 return False
             try:
                 old_file and old_file.unlink()
             except Exception:
-                _logger.exception('unable to delete file')
-        for rec in self.browse(cr, uid, ids, context=context):
-            if rec.source_type == 'img':
-                self._write_image_file(cr, uid, rec.id, context=context)
-            else: # 'txt'
-                self._write_html_file(cr, uid, rec.id, context=context)
+                _logger.exception('unable to delete file %s' % old_file)
+        self.write_files()
         return True
 
-    def unlink(self, cr, uid, ids, context=None):
-        if isinstance(ids, (int, long)):
-            ids = [ids]
+    def unlink(self):
         forward_ids = []
         files = []
-        for rec in self.browse(cr, uid, ids, context=None):
+        for rec in self:
             # collect file names that will need to be deleted
             # collect forward links for processing so they can update their back links section
-            if uid != SUPERUSER_ID and rec.reverse_links:
-                raise ERPError('linked document', 'cannot delete %r as other documents link to it' % rec.name)
+            if not self.env.su and rec.reverse_links:
+                raise ValidationError('cannot delete %r as other documents link to it' % rec.name)
             forward_ids.extend([f.id for f in rec.forward_links])
             if rec.source_type == 'txt':
-                files.append(self._wiki_path/name_key(rec.wiki_key)/rec.name_key + '.html')
+                files.append(self._wiki_path/self.calc_name_key(rec.wiki_key)/rec.name_key + '.html')
             else: # image file
-                files.append(self._wiki_path/name_key(rec.wiki_key)/rec.name_key)
-        if not super(wiki_doc, self).unlink(cr, uid, ids, context=context):
+                files.append(self._wiki_path/self.calc_name_key(rec.wiki_key)/rec.name_key)
+        if not super().unlink():
             return False
         # records successfully deleted
         for file in files:
@@ -554,14 +529,21 @@ class wiki_doc(osv.Model):
                 _logger.exception('unable to delete file')
         return True
 
-    def onchange_wiki_key(self, cr, uid, id, wiki_key, source_doc, context=None):
-        res = {}
-        if wiki_key and not source_doc:
-            key_model = self.pool.get('wiki.key')
-            [key] = key_model.read(cr, uid, [('name','=',wiki_key)], fields=['template'], context=context)
-            res['value'] = {'source_doc': key['template']}
-        return res
+    @api.onchange('wiki_key')
+    def onchange_wiki_key(self):
+        if self._wiki_key and not self.source_doc:
+            category = self.env['wiki.key'].search([('name','=',self._wiki_key)])
+            self.source_doc = category.template
 
+back_button = """
+<script>
+function goBack()
+  {
+  window.history.back()
+  }
+</script>
+<input type="button" value="Back" onclick="goBack()">
+"""
 
 placeholder = """\
 iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAACXBIWXMAAABIAAAASABGyWs+AAAACXZwQWcAAABAAAAAQAD\
@@ -584,3 +566,8 @@ Q+ckzIYm/gn+WQvWWRq6uoxuSNi4RWWAYGfRuCtjXx25Bh25MGaTFzaccCVX1wfPtkiCk+e6nh/ExXps
 PwzDiAAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDExLTAxLTE5VDAzOjU5OjAwKzAxOjAwaFry6QAAACV0RVh0ZGF0ZTptb2RpZn\
 kAMjAxMC0xMi0yMVQxNDozMDo0NCswMTowMGxOe/8AAAAZdEVYdFNvZnR3YXJlAEFkb2JlIEltYWdlUmVhZHlxyWU8AAAAA\
 ElFTkSuQmCC"""
+
+'''
+http://localhost:8069/web#id=240&action=899&model=wiki.page&view_type=form&cids=&menu_id=594
+http://localhost:8069/web#id=257&action=899&model=wiki.page&view_type=form&cids=&menu_id=590
+'''

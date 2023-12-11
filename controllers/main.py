@@ -4,7 +4,7 @@ import logging
 import os
 import werkzeug
 from base64 import b64decode
-from openerp.addons.web.http import Controller, httprequest
+from odoo import http
 from openerp.addons.web.controllers.main import content_disposition
 from mimetypes import guess_type
 from scription import OrmFile
@@ -18,27 +18,19 @@ password = settings.pw
 _logger = logging.getLogger(__name__)
 
 
-class Wiki(Controller):
+class Wiki(http.Controller):
 
-    _cp_path = '/wiki'
-
-    @httprequest
-    def image(self, request, model, img_id, **kw):
-        session = request.session
-        session._db = db
-        session._login = login
-        session._uid = 1
-        session._password = password
-        img_id = int(img_id)
-        Model = request.session.model(model)
-        page = Model.read([img_id], ['name', 'wiki_img'], request.context)[0] 
+    @http.route('/wiki/image/<string:model>/<int:img_id>', type='http', auth='public')
+    def image(self, model=None, img_id=None, **kwds):
+        _logger.warning('model: %r;  img_id=%d', model, img_id)
+        page = http.request.env[model].search([('id','=',img_id)])[0]
         image_name = page['name']
         image = b64decode(page['wiki_img'])
         try:
-            return request.make_response(
+            return http.request.make_response(
                     image,
                     headers=[
-                        ('Content-Disposition',  content_disposition(image_name, request)),
+                        ('Content-Disposition',  content_disposition(image_name)),
                         ('Content-Type', guess_type(image_name)[0] or 'octet-stream'),
                         ('Content-Length', len(image)),
                         ],
