@@ -93,8 +93,11 @@
                             @name
                         ~group
                             @private .oe_view_only
-                    ~label for='template'
-                    @template
+                    ~notebook
+                        ~page $Pages
+                            @page_ids
+                        ~page $Template
+                            @template
 
         ~record model=view #view_main_wiki_key_search
             @name: wiki.key.search

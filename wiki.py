@@ -139,10 +139,21 @@ class wiki_key(osv.Model):
     _description = 'wiki key'
     _order = 'name'
 
+    def _get_page_ids(self, cr, uid, ids, field_name, arg, context=None):
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        res = {}.fromkeys(ids, [])
+        wiki_doc = self.pool.get('wiki.page')
+        for key_id in ids:
+            wiki_key = self.read(cr, uid, key_id, fields=['name'], context=context)
+            res[key_id] = wiki_doc.search(cr, uid, [('wiki_key','=',wiki_key['name'])], context=context)
+        return res
+
     _columns = {
         'name': fields.char('Wiki Key', size=64, required=True),
         'private': fields.boolean('System', help='Omit from Knowledge -> Wiki -> Pages ?', readonly=True),
         'template': fields.text('Template'),
+        'page_ids': fields.function(_get_page_ids, string='Pages', type='one2many', obj='wiki.page'),
         }
 
     _constraints = [
