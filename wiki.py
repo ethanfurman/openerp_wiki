@@ -22,6 +22,20 @@ example `.py` file
                 'wiki_key': 'some-wiki',
                 }
 
+
+example `_data.xaml` file
+------------------------
+
+    !!! xml1.0
+
+    ~openerp
+        ~data noupdate='1'
+
+            ~record #some_wiki_key model='wiki.key'
+                    @name: Some Wiki
+                    @private eval='True'
+
+
 example `_view.xaml` file
 -------------------------
 
